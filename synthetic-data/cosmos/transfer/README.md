@@ -14,15 +14,15 @@ training robot policies and autonomous-driving systems.
 
 ## Integration Points
 
-| Component         | Description                                  |
-|-------------------|----------------------------------------------|
+| Component         | Description                                              |
+|-------------------|----------------------------------------------------------|
 | Simulation output | Rendered frames and conditioning from Isaac Sim or CARLA |
-| Training pipeline | Photorealistic frames fed to RL/IL training  |
-| Cosmos Predict    | Output frames can chain to future prediction |
+| Training pipeline | Photorealistic frames fed to RL/IL training              |
+| Cosmos Predict    | Output frames can chain to future prediction             |
 
 The end-to-end CARLA capture, geometric conditioning, and multi-view Cosmos
 workflow is implemented in
-[CARLA + Cosmos Transfer](../../../workflows/carla-cosmos/README.md).
+[CARLA + Cosmos Transfer](../../../AVOPS/carla-cosmos/README.md).
 
 ## References
 
