@@ -25,6 +25,10 @@ The SDG pipeline chains three NVIDIA Cosmos capabilities:
 2. **Cosmos Predict** — Generate plausible future frames from current observations
 3. **Cosmos Reason** — Assess and curate generated data for training quality
 
+For the integrated CARLA capture-to-Cosmos Transfer workflow, see
+[CARLA + Cosmos Transfer](../workflows/carla-cosmos/README.md). It runs CARLA from the
+official simulator image and builds Cosmos Transfer from NVIDIA's source.
+
 ## External References
 
 | Resource               | URL                                            |

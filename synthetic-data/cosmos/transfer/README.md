@@ -1,6 +1,8 @@
 # Cosmos Transfer 2.5
 
-Sim-to-real image transformation using NVIDIA Cosmos Transfer 2.5. Converts simulation-rendered frames from Isaac Sim into photorealistic images suitable for training real-world robot policies.
+Sim-to-real image transformation using NVIDIA Cosmos Transfer 2.5. Converts
+simulation-rendered frames from Isaac Sim or CARLA into photorealistic data for
+training robot policies and autonomous-driving systems.
 
 ## Capabilities
 
@@ -14,9 +16,13 @@ Sim-to-real image transformation using NVIDIA Cosmos Transfer 2.5. Converts simu
 
 | Component         | Description                                  |
 |-------------------|----------------------------------------------|
-| Isaac Sim output  | Rendered frames from simulation environments |
+| Simulation output | Rendered frames and conditioning from Isaac Sim or CARLA |
 | Training pipeline | Photorealistic frames fed to RL/IL training  |
 | Cosmos Predict    | Output frames can chain to future prediction |
+
+The end-to-end CARLA capture, geometric conditioning, and multi-view Cosmos
+workflow is implemented in
+[CARLA + Cosmos Transfer](../../../workflows/carla-cosmos/README.md).
 
 ## References
 

@@ -20,6 +20,8 @@ Use this page as a pointer index.
 |----------------------|----------------------------------------|
 | `workflows/azureml/` | AzureML workflow pointer documentation |
 | `workflows/osmo/`    | OSMO workflow pointer documentation    |
+| `workflows/carla-cosmos/` | CARLA + Cosmos Transfer 2.5 Docker Compose pipeline |
+| `workflows/ODD/` | ODD gap-analysis container run between SDG curation and generation (`sdg-workflow/scripts/sdg.sh pipeline`) |
 
 ## 🔗 Canonical Sources
 

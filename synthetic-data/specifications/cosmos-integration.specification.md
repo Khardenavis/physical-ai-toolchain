@@ -4,7 +4,10 @@ Integration specification for NVIDIA Cosmos world foundation models within the P
 
 ## Status
 
-Planned — placeholder for future implementation.
+Partially implemented. The end-to-end CARLA capture, conditioning, and Cosmos
+Transfer 2.5 pipeline is available in
+[`workflows/carla-cosmos/`](../../workflows/carla-cosmos/README.md). Cosmos Predict and
+Cosmos Reason integrations remain planned.
 
 ## Models
 
@@ -18,9 +21,14 @@ Planned — placeholder for future implementation.
 
 | Model               | Registry | Image | Tag |
 |---------------------|----------|-------|-----|
-| Cosmos Transfer 2.5 | nvcr.io  | TBD   | TBD |
+| Cosmos Transfer 2.5 | Built locally from NVIDIA's official source repository | `cosmos-transfer2.5` | `local` |
 | Cosmos Predict 2.5  | nvcr.io  | TBD   | TBD |
 | Cosmos Reason 2     | nvcr.io  | TBD   | TBD |
+
+CARLA simulation uses the official `carlasim/carla:0.9.15` image. The task
+runner and CARLA-specific pipeline code are layered onto the Cosmos
+Transfer image; upstream Cosmos and ScenarioRunner code are fetched during
+image builds rather than vendored into this repository.
 
 ## Environment Variables
 
