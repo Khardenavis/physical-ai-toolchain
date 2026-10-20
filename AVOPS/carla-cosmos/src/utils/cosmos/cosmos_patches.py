@@ -113,7 +113,7 @@ def apply_clipgt_traffic_light_state_patch(cosmos_root: Path) -> str:
             1,
         )
 
-    replacement = '''            # CARLA Cosmos traffic light state_sequence support.
+    replacement = """            # CARLA Cosmos traffic light state_sequence support.
             feature_id = light.get("feature_id")
             state_sequence = light.get("state_sequence")
             normalized_states = normalize_traffic_light_state_sequence(
@@ -137,7 +137,7 @@ def apply_clipgt_traffic_light_state_patch(cosmos_root: Path) -> str:
             traffic_light.metadata["feature_id"] = str(feature_id) if feature_id is not None else None
             traffic_light.metadata["state_sequence"] = normalized_states
             scene_data.traffic_lights.append(traffic_light)
-'''
+"""
 
     pattern = re.compile(
         r"            scene_data\.traffic_lights\.append\(\n"

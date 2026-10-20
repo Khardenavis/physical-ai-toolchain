@@ -97,7 +97,5 @@ def preflight_gpu_plan(
             f"single-GPU 2B inference; multiview may still OOM depending on view count/settings: {names}"
         )
     if required_processes >= 8 and any("L40" in gpu.name for gpu in selected_infos):
-        warnings.append(
-            "Full 5-7 view multiview on L40-class 48 GB GPUs is experimental; use a smoke run first."
-        )
+        warnings.append("Full 5-7 view multiview on L40-class 48 GB GPUs is experimental; use a smoke run first.")
     return required_processes, warnings

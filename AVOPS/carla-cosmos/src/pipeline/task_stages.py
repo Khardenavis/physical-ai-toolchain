@@ -96,9 +96,7 @@ def generate_carla_grid(carla_sim_dir: str, output_path: str) -> None:
     elif all(os.path.exists(os.path.join(carla_sim_dir, c)) for c in CAMERAS_6):
         cams = CAMERAS_6
         filter_desc = (
-            "[0:v][1:v][2:v][3:v][4:v][5:v]xstack=inputs=6:"
-            "layout=0_0|w0_0|w0+w1_0|0_h0|w0_h0|w0+w1_h0:"
-            "fill=black[v]"
+            "[0:v][1:v][2:v][3:v][4:v][5:v]xstack=inputs=6:layout=0_0|w0_0|w0+w1_0|0_h0|w0_h0|w0+w1_h0:fill=black[v]"
         )
     elif all(os.path.exists(os.path.join(carla_sim_dir, c)) for c in CAMERAS_4):
         cams = CAMERAS_4

@@ -96,9 +96,7 @@ def extract_first_frame_b64(video_path: str | Path, max_dim: int = 768) -> str:
     raise ValueError(f"Could not extract keyframe from video: {v_path}")
 
 
-def encode_video_b64(
-    video_path: str | Path, max_bytes: int = DEFAULT_MAX_VIDEO_BYTES, max_dim: int = 768
-) -> str:
+def encode_video_b64(video_path: str | Path, max_bytes: int = DEFAULT_MAX_VIDEO_BYTES, max_dim: int = 768) -> str:
     """Return the whole clip as a base64 MP4.
 
     The file is sent as it is. It is re-encoded with ffmpeg (no audio, long side at most ``max_dim``)
@@ -240,7 +238,8 @@ class VLMAnnotator:
             self.initialize()
             scene = "driving video clip" if self.media == "video" else "driving scene image"
             questions_text = "\n".join([f"- {fq['flat_key']}: {fq['question']}" for fq in flat_questions])
-            batch_prompt = f"""Analyze the {scene} and answer the following questions.
+            batch_prompt = (
+                f"""Analyze the {scene} and answer the following questions.
 Return your output ONLY as a JSON object where the keys are the question IDs and the values are the answers.
 
 Questions:
@@ -248,9 +247,12 @@ Questions:
 
 Output format:
 {{
-""" + ",\n".join([f'  "{fq["flat_key"]}": "answer"' for fq in flat_questions]) + """
+"""
+                + ",\n".join([f'  "{fq["flat_key"]}": "answer"' for fq in flat_questions])
+                + """
 }
 Respond with ONLY the valid JSON object."""
+            )
 
             parsed_data: dict[str, Any] = {}
             try:

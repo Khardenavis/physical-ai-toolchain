@@ -172,10 +172,7 @@ def main() -> None:
             assert member is not None
             states = json.loads(member.read())["traffic_light_states"]["carla_traffic_light_12_0"]["state"]
             assert states == ["GREEN", "YELLOW"]
-        pcd_utils = (
-            out
-            / "cosmos_transfer2/_src/imaginaire/auxiliary/world_scenario/utils/pcd_utils.py"
-        )
+        pcd_utils = out / "cosmos_transfer2/_src/imaginaire/auxiliary/world_scenario/utils/pcd_utils.py"
         pcd_utils.parent.mkdir(parents=True)
         pcd_utils.write_text(
             "import numpy as np\n"
@@ -190,10 +187,7 @@ def main() -> None:
         apply_robust_triangulation_patch(out)
         assert QHULL_SENTINEL in pcd_utils.read_text()
         assert pcd_utils.with_suffix(".py.carla_cosmos_backup").exists()
-        clipgt_loader = (
-            out
-            / "cosmos_transfer2/_src/imaginaire/auxiliary/world_scenario/dataloaders/clipgt_loader.py"
-        )
+        clipgt_loader = out / "cosmos_transfer2/_src/imaginaire/auxiliary/world_scenario/dataloaders/clipgt_loader.py"
         clipgt_loader.parent.mkdir(parents=True)
         clipgt_loader.write_text(
             "from data_types import (\n"
@@ -205,7 +199,7 @@ def main() -> None:
             "def load(scene_data, idx, center, dimensions, orientation):\n"
             "            scene_data.traffic_lights.append(\n"
             "                TrafficLight(\n"
-            "                    element_id=f\"traffic_light_{idx}\",\n"
+            '                    element_id=f"traffic_light_{idx}",\n'
             "                    center=center,\n"
             "                    dimensions=dimensions,\n"
             "                    orientation=orientation,\n"

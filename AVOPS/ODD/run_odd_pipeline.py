@@ -374,15 +374,11 @@ def main():
     if args.generation_prompts:
         use_llm = vlm_healthy and not args.mock_vlm
         if use_llm:
-            writer = PromptWriter.from_endpoint(
-                args.vlm_url, args.vlm_model, annotator.api_key, args.vlm_timeout
-            )
+            writer = PromptWriter.from_endpoint(args.vlm_url, args.vlm_model, annotator.api_key, args.vlm_timeout)
         else:
             logger.warning("Writing template prompts (VLM is offline or --mock-vlm specified)")
             writer = PromptWriter()
-        prompt_index = write_generation_prompts(
-            output_dir, config, writer, args.vlm_model if use_llm else ""
-        )
+        prompt_index = write_generation_prompts(output_dir, config, writer, args.vlm_model if use_llm else "")
         prompt_count = len(prompt_index["prompts"])
         logger.info("Wrote %d generation prompt(s) to %s", prompt_count, PROMPTS_FILENAME)
 
@@ -396,18 +392,20 @@ def main():
             score = item["odd_score"]
             needed = item["needed_variations"]
             total_needed = sum(needed.values())
-            detected_gaps_detail.append({
-                "category": cat_name,
-                "attribute": attr_name,
-                "odd_score": round(score, 4),
-                "threshold": item["threshold"],
-                "status": "GAP",
-                "needed_variations": needed,
-                "total_needed": total_needed,
-                "recommendation": (
-                    f"Augment dataset with {total_needed} variation(s) across: {', '.join(needed.keys())}"
-                ),
-            })
+            detected_gaps_detail.append(
+                {
+                    "category": cat_name,
+                    "attribute": attr_name,
+                    "odd_score": round(score, 4),
+                    "threshold": item["threshold"],
+                    "status": "GAP",
+                    "needed_variations": needed,
+                    "total_needed": total_needed,
+                    "recommendation": (
+                        f"Augment dataset with {total_needed} variation(s) across: {', '.join(needed.keys())}"
+                    ),
+                }
+            )
 
     final_gap_output = {
         "status": "COMPLETED",

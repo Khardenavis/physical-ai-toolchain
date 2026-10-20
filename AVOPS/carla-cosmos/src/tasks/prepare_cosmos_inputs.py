@@ -180,8 +180,7 @@ def downsample_rows(
         return selected, {int(row["key"]["timestamp_micros"]) for row in selected}
     if element == "obstacle" and keep_timestamps is not None:
         return [
-            row for row in rows
-            if int(row.get("key", {}).get("timestamp_micros", -1)) in keep_timestamps
+            row for row in rows if int(row.get("key", {}).get("timestamp_micros", -1)) in keep_timestamps
         ], keep_timestamps
     return rows, keep_timestamps
 

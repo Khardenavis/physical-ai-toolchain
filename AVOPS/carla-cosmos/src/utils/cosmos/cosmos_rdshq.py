@@ -312,10 +312,7 @@ def _write_object_tar(
     for row in obstacle_rows:
         rows_by_timestamp[int(row["key"]["timestamp_micros"])].append(row)
 
-    timestamps = [
-        int(row["key"]["timestamp_micros"])
-        for row in rows_by_element.get("egomotion_estimate", [])
-    ]
+    timestamps = [int(row["key"]["timestamp_micros"]) for row in rows_by_element.get("egomotion_estimate", [])]
     entries: dict[str, bytes] = {}
     for frame_index, timestamp in enumerate(timestamps):
         frame_objects: dict[str, dict[str, Any]] = {}
@@ -438,11 +435,7 @@ def _write_map_tars(
     )
     _write_tar(
         output_dir / "3d_traffic_lights_status" / f"{clip_id}.tar",
-        {
-            _clip_member(clip_id, "aggregated_states.json"): _json_bytes(
-                {"traffic_light_states": traffic_light_states}
-            )
-        },
+        {_clip_member(clip_id, "aggregated_states.json"): _json_bytes({"traffic_light_states": traffic_light_states})},
     )
 
     sign_labels = []

@@ -144,9 +144,7 @@ class ODDCoverageConfig:
                     expected_values=[str(v).strip() for v in attr_data.get("expected_values", [])],
                     weight=float(attr_data.get("weight", 1.0)),
                     recommendation=attr_data.get("recommendation"),
-                    threshold=float(attr_data["threshold"])
-                    if attr_data.get("threshold") is not None
-                    else None,
+                    threshold=float(attr_data["threshold"]) if attr_data.get("threshold") is not None else None,
                 )
             categories[category_name] = CategorySpec(
                 name=category_name, attributes=attributes, threshold=category_threshold
@@ -229,9 +227,7 @@ def _compute_odd_score(
         entropy = 0.0
     else:
         balance_threshold = filled / support
-        coverage = float(
-            min(sum(min(count, balance_threshold) for count in distribution.values()) / filled, 1.0)
-        )
+        coverage = float(min(sum(min(count, balance_threshold) for count in distribution.values()) / filled, 1.0))
 
         entropy_value = 0.0
         for count in distribution.values():
@@ -244,11 +240,7 @@ def _compute_odd_score(
         else:
             entropy = 1.0 if support == 1 else 0.0
 
-    return (
-        completeness * completeness_weight
-        + coverage * coverage_weight
-        + entropy * entropy_weight
-    )
+    return completeness * completeness_weight + coverage * coverage_weight + entropy * entropy_weight
 
 
 # =====================================================================
@@ -292,9 +284,7 @@ class ODDCoverageEngine:
         if not self.scenes:
             raise ValueError("Dataset is empty. Load scene records before calling analyze().")
 
-        extracted_attributes = [
-            self._extract_scene_attributes(scene) for scene in self.scenes
-        ]
+        extracted_attributes = [self._extract_scene_attributes(scene) for scene in self.scenes]
         attribute_reports: dict[str, AttributeReport] = {}
 
         for category_name, category_spec in self.config.categories.items():
@@ -310,22 +300,13 @@ class ODDCoverageEngine:
         for report in attribute_reports.values():
             category_totals.setdefault(report.category, []).append(report.odd_score)
 
-        category_scores = {
-            cat: float(sum(scores) / len(scores))
-            for cat, scores in category_totals.items()
-        }
-        overall_score = (
-            float(sum(category_scores.values()) / len(category_scores))
-            if category_scores
-            else 0.0
-        )
+        category_scores = {cat: float(sum(scores) / len(scores)) for cat, scores in category_totals.items()}
+        overall_score = float(sum(category_scores.values()) / len(category_scores)) if category_scores else 0.0
         gaps = self._detect_gaps(attribute_reports)
 
         return {
             "overall_odd_score": round(overall_score, 4),
-            "category_scores": {
-                cat: round(score, 4) for cat, score in category_scores.items()
-            },
+            "category_scores": {cat: round(score, 4) for cat, score in category_scores.items()},
             "attributes": {name: r.to_dict() for name, r in attribute_reports.items()},
             "gaps": gaps,
         }
@@ -337,14 +318,10 @@ class ODDCoverageEngine:
 
         for category_spec in self.config.categories.values():
             for attribute_name, attribute_spec in category_spec.attributes.items():
-                result[attribute_name] = self._extract_attribute_value(
-                    normalized_answers, attribute_spec
-                )
+                result[attribute_name] = self._extract_attribute_value(normalized_answers, attribute_spec)
         return result
 
-    def _extract_attribute_value(
-        self, answer_map: dict[str, str], spec: AttributeSpec
-    ) -> str | None:
+    def _extract_attribute_value(self, answer_map: dict[str, str], spec: AttributeSpec) -> str | None:
         candidate: str | None = None
         keys = [normalize_attribute_string(k) for k in spec.source_keys]
 
@@ -363,9 +340,7 @@ class ODDCoverageEngine:
         if candidate is None:
             return None
 
-        return self._canonicalize_value(
-            normalize_attribute_string(candidate), spec.expected_values
-        )
+        return self._canonicalize_value(normalize_attribute_string(candidate), spec.expected_values)
 
     def _canonicalize_value(self, value: str, expected: Sequence[str]) -> str | None:
         if value in self.config.synonyms:
@@ -379,9 +354,7 @@ class ODDCoverageEngine:
                 return item
         return None
 
-    def _flatten_answers(
-        self, annotation: Any, prefix: str | None = None
-    ) -> dict[str, str]:
+    def _flatten_answers(self, annotation: Any, prefix: str | None = None) -> dict[str, str]:
         flattened: dict[str, str] = {}
         if isinstance(annotation, dict):
             if "answer" in annotation and isinstance(annotation["answer"], str):
@@ -411,9 +384,7 @@ class ODDCoverageEngine:
 
         coverage = self._compute_coverage(distribution, attribute_spec.expected_values)
         entropy = self._compute_entropy(distribution, attribute_spec.expected_values)
-        threshold_cov = self._compute_threshold_coverage(
-            distribution, attribute_spec.expected_values, filled
-        )
+        threshold_cov = self._compute_threshold_coverage(distribution, attribute_spec.expected_values, filled)
         completeness = float(filled / total) if total else 0.0
 
         score = _compute_odd_score(
@@ -439,15 +410,10 @@ class ODDCoverageEngine:
             entropy=entropy,
             threshold_coverage=threshold_cov,
             odd_score=score,
-            distribution={
-                k: int(v)
-                for k, v in sorted(full_dist.items(), key=lambda x: (-x[1], x[0]))
-            },
+            distribution={k: int(v) for k, v in sorted(full_dist.items(), key=lambda x: (-x[1], x[0]))},
         )
 
-    def _compute_coverage(
-        self, distribution: Counter, expected: Sequence[str]
-    ) -> float:
+    def _compute_coverage(self, distribution: Counter, expected: Sequence[str]) -> float:
         """Compute coverage score using the dynamic threshold average logic."""
         filled_count = sum(distribution.values())
         K = len(expected) if expected else len(distribution)
@@ -480,9 +446,7 @@ class ODDCoverageEngine:
             return 1.0
         return 0.0
 
-    def _compute_threshold_coverage(
-        self, distribution: Counter, expected: Sequence[str], filled: int
-    ) -> float:
+    def _compute_threshold_coverage(self, distribution: Counter, expected: Sequence[str], filled: int) -> float:
         return self._compute_coverage(distribution, expected)
 
     def _detect_gaps(self, reports: dict[str, AttributeReport]) -> list[dict[str, str]]:
@@ -497,21 +461,12 @@ class ODDCoverageEngine:
                 report = reports.get(attribute_name)
                 if not report:
                     continue
-                missing_vals = [
-                    v
-                    for v in attribute_spec.expected_values
-                    if report.distribution.get(v, 0) == 0
-                ]
+                missing_vals = [v for v in attribute_spec.expected_values if report.distribution.get(v, 0) == 0]
                 underrep_vals = [
-                    v
-                    for v in attribute_spec.expected_values
-                    if 0 < report.distribution.get(v, 0) < underrep_threshold
+                    v for v in attribute_spec.expected_values if 0 < report.distribution.get(v, 0) < underrep_threshold
                 ]
 
-                rec_template = (
-                    attribute_spec.recommendation
-                    or "Generate additional {attribute} scenarios for {value}."
-                )
+                rec_template = attribute_spec.recommendation or "Generate additional {attribute} scenarios for {value}."
                 if missing_vals:
                     val_text = ", ".join(missing_vals)
                     gaps.append(
@@ -521,9 +476,7 @@ class ODDCoverageEngine:
                                 f"{val_text.replace('_', ' ').capitalize()} "
                                 f"{attribute_name.replace('_', ' ')} conditions are not represented."
                             ),
-                            "variation_required": rec_template.format(
-                                value=val_text, attribute=attribute_name
-                            ),
+                            "variation_required": rec_template.format(value=val_text, attribute=attribute_name),
                         }
                     )
                 if underrep_vals:
@@ -535,9 +488,7 @@ class ODDCoverageEngine:
                                 f"{val_text.replace('_', ' ').capitalize()} "
                                 f"{attribute_name.replace('_', ' ')} conditions are underrepresented."
                             ),
-                            "variation_required": rec_template.format(
-                                value=val_text, attribute=attribute_name
-                            ),
+                            "variation_required": rec_template.format(value=val_text, attribute=attribute_name),
                         }
                     )
 
@@ -599,8 +550,7 @@ def calculate_needed_variations(
             additional_count = math.ceil(
                 max(
                     0.0,
-                    (required_completeness * dataset_size - filled)
-                    / (1.0 - required_completeness),
+                    (required_completeness * dataset_size - filled) / (1.0 - required_completeness),
                 )
             )
             max_target_count += additional_count
@@ -645,9 +595,7 @@ def select_base_videos_for_attribute(
         match = True
         for filter_attr, expected_val in req_conditions.items():
             actual_val = attrs.get(filter_attr)
-            if actual_val is None or normalize_attribute_string(actual_val) != normalize_attribute_string(
-                expected_val
-            ):
+            if actual_val is None or normalize_attribute_string(actual_val) != normalize_attribute_string(expected_val):
                 match = False
                 break
 
@@ -676,9 +624,7 @@ def select_base_videos_for_attribute(
     return result
 
 
-def filter_spec_by_qa_template(
-    spec_dict: dict[str, Any], qa_template: dict[str, Any]
-) -> dict[str, Any]:
+def filter_spec_by_qa_template(spec_dict: dict[str, Any], qa_template: dict[str, Any]) -> dict[str, Any]:
     """Dynamically prunes and aligns ODD coverage specification against qa_template.json."""
     filtered_categories: dict[str, Any] = {}
     spec_categories = spec_dict.get("categories", {})
@@ -721,9 +667,11 @@ def load_scenes_from_annotations(
         return records
 
     video_extensions = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
-    video_files = [
-        f for f in Path(video_dir).rglob("*") if f.suffix.lower() in video_extensions
-    ] if video_dir and Path(video_dir).exists() else []
+    video_files = (
+        [f for f in Path(video_dir).rglob("*") if f.suffix.lower() in video_extensions]
+        if video_dir and Path(video_dir).exists()
+        else []
+    )
 
     for file in sorted(annot_path.glob("*.json")):
         if "_var_" in file.name:
@@ -806,16 +754,13 @@ def modify_annotation_for_attribute(
     return updated
 
 
-def _resolve_attribute_threshold(
-    attribute_spec: AttributeSpec, category_spec: CategorySpec
-) -> float:
+def _resolve_attribute_threshold(attribute_spec: AttributeSpec, category_spec: CategorySpec) -> float:
     if attribute_spec.threshold is not None:
         return attribute_spec.threshold
     if category_spec.threshold is not None:
         return category_spec.threshold
     raise ValueError(
-        f"No threshold configured for ODD attribute '{attribute_spec.name}' "
-        f"in category '{category_spec.name}'."
+        f"No threshold configured for ODD attribute '{attribute_spec.name}' in category '{category_spec.name}'."
     )
 
 
@@ -915,18 +860,14 @@ def generate_variations_for_gaps(
                     while generated < needed_count:
                         rec = records[idx % len(records)]
                         scene_id = rec["scene_id"]
-                        modified = modify_annotation_for_attribute(
-                            rec["text_annotation"], attribute_spec, val
-                        )
+                        modified = modify_annotation_for_attribute(rec["text_annotation"], attribute_spec, val)
 
                         run_id = (generated // len(records)) + 1
                         filename = f"{scene_id}_var_{category_name}_{attribute_name}_{val}_run{run_id}.json"
 
                         scene_folder = out_path / scene_id
                         scene_folder.mkdir(parents=True, exist_ok=True)
-                        (scene_folder / filename).write_text(
-                            json.dumps(modified, indent=4), encoding="utf-8"
-                        )
+                        (scene_folder / filename).write_text(json.dumps(modified, indent=4), encoding="utf-8")
 
                         total_variations += 1
                         generated += 1
@@ -941,9 +882,7 @@ def generate_variations_for_gaps(
         "total_variations_generated": total_variations,
         "variation_sets": variation_sets,
     }
-    (out_path / "variation_summary.json").write_text(
-        json.dumps(summary_data, indent=4), encoding="utf-8"
-    )
+    (out_path / "variation_summary.json").write_text(json.dumps(summary_data, indent=4), encoding="utf-8")
 
     # 2. Extract scene attributes map for video filtering
     scene_attribute_maps = {
@@ -984,9 +923,7 @@ def generate_variations_for_gaps(
             for val, count in attr_data["needed_variations"].items():
                 values_data[val] = {
                     "required_count": count,
-                    "suitable_videos": video_json_data["categories"][category_name][
-                        attr_name
-                    ][val]["suitable_videos"],
+                    "suitable_videos": video_json_data["categories"][category_name][attr_name][val]["suitable_videos"],
                 }
             wfm_gaps[category_name][attr_name] = {
                 "odd_score": attr_data["odd_score"],
@@ -1000,12 +937,8 @@ def generate_variations_for_gaps(
         "generation_gaps": wfm_gaps,
     }
 
-    (out_path / "variations_video_input.json").write_text(
-        json.dumps(video_json_data, indent=4), encoding="utf-8"
-    )
-    (out_path / "wfm_generation_input.json").write_text(
-        json.dumps(wfm_input_data, indent=4), encoding="utf-8"
-    )
+    (out_path / "variations_video_input.json").write_text(json.dumps(video_json_data, indent=4), encoding="utf-8")
+    (out_path / "wfm_generation_input.json").write_text(json.dumps(wfm_input_data, indent=4), encoding="utf-8")
 
     return {
         "status": "success",
@@ -1042,9 +975,7 @@ def build_category_summary(
     summaries: list[dict[str, Any]] = []
     attributes = report.get("attributes", {})
     category_scores = report.get("category_scores", {})
-    category_attribute_map: dict[str, list[dict[str, Any]]] = {
-        category: [] for category in category_scores
-    }
+    category_attribute_map: dict[str, list[dict[str, Any]]] = {category: [] for category in category_scores}
 
     for name, metric in attributes.items():
         category = metric.get("category")
@@ -1096,9 +1027,7 @@ def format_category_summary(summaries: Sequence[dict[str, Any]]) -> str:
         delta = item.get("delta", 0)
         status = str(item.get("status", "")).upper()
         score = float(item.get("odd_score", 0.0))
-        lines.append(
-            f"{cat:<24} {set_count:<8} {detected:<10} {delta:<8} {status:<8} {score:<10.3f}"
-        )
+        lines.append(f"{cat:<24} {set_count:<8} {detected:<10} {delta:<8} {status:<8} {score:<10.3f}")
     return "\n".join(lines)
 
 

@@ -106,9 +106,7 @@ class PromptWriter:
         self._complete = complete
 
     @classmethod
-    def from_endpoint(
-        cls, endpoint_url: str, model_name: str, api_key: str, timeout: float
-    ) -> PromptWriter:
+    def from_endpoint(cls, endpoint_url: str, model_name: str, api_key: str, timeout: float) -> PromptWriter:
         from openai import OpenAI
 
         client = OpenAI(base_url=endpoint_url.rstrip("/"), api_key=api_key, timeout=timeout)
@@ -125,25 +123,19 @@ class PromptWriter:
         """Return (paragraph, source) where source is 'llm' or 'template'."""
         facts = scene_facts(annotation)
         if self._complete is not None:
-            fact_lines = "\n".join(
-                f"- {question or humanize(key)} -> {answer}" for key, question, answer in facts
-            )
+            fact_lines = "\n".join(f"- {question or humanize(key)} -> {answer}" for key, question, answer in facts)
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": USER_PROMPT.format(
-                        facts=fact_lines, target=target_phrase(attribute, value)
-                    ),
+                    "content": USER_PROMPT.format(facts=fact_lines, target=target_phrase(attribute, value)),
                 },
             ]
             try:
                 paragraph = normalize_paragraph(self._complete(messages))
                 if paragraph:
                     return paragraph, "llm"
-                logger.warning(
-                    "LLM returned no usable paragraph for %s=%s; using template", attribute, value
-                )
+                logger.warning("LLM returned no usable paragraph for %s=%s; using template", attribute, value)
             except Exception as exc:
                 logger.warning(
                     "LLM prompt request failed for %s=%s (%s); using template",
@@ -175,9 +167,7 @@ def write_generation_prompts(
                 for video in videos:
                     scene = video["scene_name"]
                     stem = f"{scene}_var_{category}_{attribute}_{value}"
-                    variation = next(
-                        iter(sorted((output_dir / scene).glob(f"{stem}_run*.json"))), None
-                    )
+                    variation = next(iter(sorted((output_dir / scene).glob(f"{stem}_run*.json"))), None)
                     if variation is not None:
                         annotation = _load(variation)
                     else:
@@ -200,9 +190,7 @@ def write_generation_prompts(
                             "value": value,
                             "scene_name": scene,
                             "video_path": video["video_path"],
-                            "variation_file": (
-                                str(variation.relative_to(output_dir)) if variation else None
-                            ),
+                            "variation_file": (str(variation.relative_to(output_dir)) if variation else None),
                             "prompt_file": str(prompt_file.relative_to(output_dir)),
                             "source": source,
                             "prompt": paragraph,

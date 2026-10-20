@@ -127,13 +127,9 @@ def resolve_views(values: Iterable[str] | None, *, available: Iterable[str] | No
             if key in COSMOS_NAME_TO_VIEW_KEY:
                 key = COSMOS_NAME_TO_VIEW_KEY[key]
             if key not in CAMERA_VIEWS:
-                raise ValueError(
-                    f"Unknown view '{value}'. Use one or more of: all, {', '.join(VIEW_ORDER)}"
-                )
+                raise ValueError(f"Unknown view '{value}'. Use one or more of: all, {', '.join(VIEW_ORDER)}")
             if key not in available_set:
-                raise ValueError(
-                    f"View '{key}' is not available. Available views: {', '.join(sorted(available_set))}"
-                )
+                raise ValueError(f"View '{key}' is not available. Available views: {', '.join(sorted(available_set))}")
             if key not in selected:
                 selected.append(key)
 

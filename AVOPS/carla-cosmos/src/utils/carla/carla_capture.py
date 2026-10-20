@@ -169,8 +169,8 @@ def load_camera_specs(path: Path | None) -> tuple[CameraSpec, ...]:
         cosmos_name = entry.get("cosmos_name") or (default_spec.cosmos_name if default_spec else None)
         if cosmos_name is None:
             raise ValueError(f"Camera config entry is missing cosmos_name: {entry}")
-        location = entry.get("location_xyz") or entry.get("location") or (
-            default_spec.location_xyz if default_spec else None
+        location = (
+            entry.get("location_xyz") or entry.get("location") or (default_spec.location_xyz if default_spec else None)
         )
         if location is None or len(location) != 3:
             raise ValueError(f"Camera {cosmos_name} must define location_xyz with three numbers")
@@ -192,10 +192,7 @@ def load_camera_specs(path: Path | None) -> tuple[CameraSpec, ...]:
 def select_camera_specs(
     all_specs: tuple[CameraSpec, ...], views: list[str]
 ) -> tuple[list[str], tuple[CameraSpec, ...]]:
-    spec_by_key = {
-        COSMOS_NAME_TO_VIEW_KEY.get(spec.cosmos_name, spec.cosmos_name): spec
-        for spec in all_specs
-    }
+    spec_by_key = {COSMOS_NAME_TO_VIEW_KEY.get(spec.cosmos_name, spec.cosmos_name): spec for spec in all_specs}
     selected_keys = resolve_views(views, available=spec_by_key.keys())
     return selected_keys, tuple(spec_by_key[key] for key in selected_keys)
 
@@ -1029,8 +1026,7 @@ def collect_static_vehicle_obstacles(
     if not labels_to_query:
         available = ", ".join(city_object_label_names()) or "unknown"
         log_step(
-            "Could not query static vehicle environment objects: "
-            f"no usable CityObjectLabel; available: {available}"
+            f"Could not query static vehicle environment objects: no usable CityObjectLabel; available: {available}"
         )
         return []
 
@@ -1187,9 +1183,7 @@ def wait_for_camera_frame_at_or_after(
             image = frame_queue.get(timeout=max(0.01, deadline - time.time()))
         except queue.Empty as exc:
             extra = f"; last seen frame {last_seen}" if last_seen is not None else ""
-            raise TimeoutError(
-                f"Timed out waiting for {camera_name} frame >= {min_frame_id}{extra}"
-            ) from exc
+            raise TimeoutError(f"Timed out waiting for {camera_name} frame >= {min_frame_id}{extra}") from exc
         last_seen = int(image.frame)
         if image.frame >= min_frame_id:
             return image
@@ -1921,6 +1915,7 @@ def main() -> None:
         if os.path.exists(xml_path):
             try:
                 import xml.etree.ElementTree as ET
+
                 tree = ET.parse(xml_path)
                 for s in tree.iter("scenario"):
                     if "town" in s.attrib:
@@ -1969,9 +1964,7 @@ def main() -> None:
         if args.openscenario or args.scenario:
             sr_env = os.environ.copy()
             sr_env["SCENARIO_RUNNER_ROOT"] = SCENARIO_RUNNER_ROOT
-            sr_env["PYTHONPATH"] = os.pathsep.join(
-                [SCENARIO_RUNNER_ROOT, sr_env.get("PYTHONPATH", "")]
-            )
+            sr_env["PYTHONPATH"] = os.pathsep.join([SCENARIO_RUNNER_ROOT, sr_env.get("PYTHONPATH", "")])
             sr_env["SCENARIO_RUNNER_NO_CLEANUP"] = "1"
 
             sr_cmd = [
@@ -1993,20 +1986,19 @@ def main() -> None:
                 if not os.path.exists(xml_path) and "cutin" in args.scenario.lower():
                     xml_path = os.path.join(SCENARIOS_DIR, "CutIn.xml")
                 if not os.path.exists(xml_path):
-                    xml_path = os.path.join(
-                        SCENARIO_RUNNER_ROOT, "srunner", "examples", f"{args.scenario}.xml"
-                    )
+                    xml_path = os.path.join(SCENARIO_RUNNER_ROOT, "srunner", "examples", f"{args.scenario}.xml")
                 scenario_arg = args.scenario
                 if os.path.exists(xml_path):
                     try:
                         import xml.etree.ElementTree as ET
+
                         tree = ET.parse(xml_path)
-                        names = [s.attrib.get('name') for s in tree.iter('scenario') if s.attrib.get('name')]
+                        names = [s.attrib.get("name") for s in tree.iter("scenario") if s.attrib.get("name")]
                         if args.scenario not in names:
                             matched = None
-                            for s in tree.iter('scenario'):
-                                name = s.attrib.get('name', '')
-                                stype = s.attrib.get('type', '')
+                            for s in tree.iter("scenario"):
+                                name = s.attrib.get("name", "")
+                                stype = s.attrib.get("type", "")
                                 if stype == args.scenario or args.scenario in name:
                                     matched = name
                                     break
@@ -2021,8 +2013,8 @@ def main() -> None:
             time.sleep(0.5)
             try:
                 cur_w = client.get_world()
-                for a in cur_w.get_actors().filter('vehicle.*'):
-                    if a.attributes.get('role_name') == 'hero':
+                for a in cur_w.get_actors().filter("vehicle.*"):
+                    if a.attributes.get("role_name") == "hero":
                         a.destroy()
             except Exception:
                 pass
@@ -2036,8 +2028,8 @@ def main() -> None:
                 time.sleep(1)
                 try:
                     world = client.get_world()
-                    for actor in world.get_actors().filter('vehicle.*'):
-                        if 'role_name' in actor.attributes and actor.attributes['role_name'] == 'hero':
+                    for actor in world.get_actors().filter("vehicle.*"):
+                        if "role_name" in actor.attributes and actor.attributes["role_name"] == "hero":
                             ego_vehicle = actor
                             break
                 except Exception:
@@ -2266,7 +2258,7 @@ def main() -> None:
             "width": args.width,
             "height": args.height,
             "town": world.get_map().name,
-            "seed": manifest.get("seed"),
+            "seed": args.seed,
             "active_views": active_view_keys,
             "vehicles": args.vehicles,
             "lead_vehicles": args.lead_vehicles,
@@ -2283,11 +2275,7 @@ def main() -> None:
             "capture_dir": str(capture_root),
             "weather": weather_metadata,
             "cameras": [spec_to_manifest(spec) for spec in active_camera_specs],
-            "resolved_config": {
-                key: value
-                for key, value in vars(args).items()
-                if key not in {"set_values"}
-            },
+            "resolved_config": {key: value for key, value in vars(args).items() if key not in {"set_values"}},
             "notes": [
                 "CARLA coordinates were converted from X-forward/Y-right/Z-up to Cosmos FLU X-forward/Y-left/Z-up.",
                 "Optional map metadata is best-effort from CARLA map/traffic actor APIs.",

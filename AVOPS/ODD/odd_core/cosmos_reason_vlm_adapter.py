@@ -176,7 +176,7 @@ def _load_single_model(
                 f"\n[cosmos-reason-adapter] [ERROR] Access to model '{model_name}' requires authentication:\n"
                 f"Cosmos-Reason models are gated on Hugging Face.\n"
                 f"1. Agree to terms at: https://huggingface.co/{model_name}\n"
-                f"2. Set your Hugging Face token: export HF_TOKEN=\"hf_...\" (or run `huggingface-cli login`).\n"
+                f'2. Set your Hugging Face token: export HF_TOKEN="hf_..." (or run `huggingface-cli login`).\n'
             )
         raise
 
@@ -333,8 +333,7 @@ def _run_inference(
         generated_ids = active_model.generate(**inputs, max_new_tokens=max_new_tokens)
 
     generated_ids_trimmed = [
-        out_ids[len(in_ids):]
-        for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
+        out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
     ]
 
     output_text = active_processor.batch_decode(
@@ -425,9 +424,7 @@ def _build_app():
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Cosmos-Reason2-2B VLM adapter (default: nvidia/Cosmos-Reason2-2B)"
-    )
+    parser = argparse.ArgumentParser(description="Cosmos-Reason2-2B VLM adapter (default: nvidia/Cosmos-Reason2-2B)")
     parser.add_argument(
         "--model",
         default="nvidia/Cosmos-Reason2-2B",

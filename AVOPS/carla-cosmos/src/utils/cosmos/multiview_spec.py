@@ -32,8 +32,7 @@ def build_prompt(manifest: dict[str, Any], prompt: str | None = None) -> str:
         sun = weather.get("sun_altitude_angle")
         if any(value is not None for value in (clouds, rain, sun)):
             parts.append(
-                "Scenario weather metadata: "
-                f"cloudiness={clouds}, precipitation={rain}, sun_altitude_angle={sun}."
+                f"Scenario weather metadata: cloudiness={clouds}, precipitation={rain}, sun_altitude_angle={sun}."
             )
     town = manifest.get("town") or manifest.get("map")
     if town:
