@@ -1,5 +1,9 @@
 # AVOPS on Azure
 
+![AVOPS workflow architecture](assets/avops.png)
+
+The AVOPS workflow on Azure turns your curated driving data into targeted ODD insights and richer synthetic scenes—using the Cosmos DAG workflow or the optional CARLA + Cosmos pipeline.
+
 This feature provides workflows for Autonomous Vehicles specific synthetic data generation using Nvidia PAIDF on a Kubernetes GPU cluster. The scripts configure and manage the workflow without vendoring or modifying its repository.
 
 ## 🚀 Quick Start
