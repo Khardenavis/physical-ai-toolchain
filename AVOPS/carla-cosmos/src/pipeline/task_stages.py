@@ -19,7 +19,7 @@ from ..utils.pipeline_io import PACKAGE
 COSMOS_ROOT = "/workspace"
 SCENARIO_RUNNER_ROOT = os.environ.get("SCENARIO_RUNNER_ROOT", "/opt/scenario_runner")
 DATA_ROOT = Path(os.environ.get("CARLA_COSMOS_DATA_ROOT", "/workspace/data"))
-CARLA_HOST = os.environ.get("CARLA_HOST", "localhost")
+CARLA_HOST = os.environ.get("CARLA_HOST", "127.0.0.1")
 CARLA_PORT = int(os.environ.get("CARLA_PORT", "2000"))
 CARLA_TRAFFIC_MANAGER_PORT = int(os.environ.get("CARLA_TRAFFIC_MANAGER_PORT", "8005"))
 

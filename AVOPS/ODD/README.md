@@ -20,7 +20,7 @@ This component ingests raw driving videos (and optional pre-existing annotations
                                              ▼
                       ┌──────────────────────────────────────────────┐
                       │          Phase 1: VLM Perception            │
-                      │  - Keyframe extraction (PyAV / OpenCV)       │
+                      │  - Whole clip sent as video (or 1st frame)   │
                       │  - Batch VLM query (Cosmos-Reason2-2B)       │
                       │  - Fallback / Mock perception support        │
                       └──────────────────────┬───────────────────────┘
@@ -70,7 +70,7 @@ AVOPS/ODD/
 │   └── qa_template.json        # Visual QA template for perception attributes
 └── odd_core/
     ├── __init__.py             # Public API exports
-    ├── annotator.py            # Keyframe extractor & OpenAI/VLM batch client
+    ├── annotator.py            # Clip encoder & OpenAI/VLM batch client
     ├── engine.py               # ODD coverage engine & entropy-delta variation solver
     └── prompt_writer.py        # Variation -> single text paragraph for Cosmos generation models
 ```
@@ -88,13 +88,19 @@ AVOPS/ODD/
   * OpenAI-compatible multimodal endpoint (e.g., `nvidia/Cosmos-Reason2-2B` on port `8010`).
   * If offline, `--mock-vlm` or auto-fallback generates heuristic perception annotations for offline testing.
 
+### VLM Video Input
+
+By default each clip goes to the VLM as a whole, as an OpenAI `video_url` content part (a base64 MP4 data URL), so the answers reflect the entire clip and not only its first frame. The file is sent unchanged when it is an MP4 within `--vlm-max-video-mb`; otherwise ffmpeg re-encodes it (no audio, long side at most 768 px). Set `--vlm-input frame` for endpoints without video input; the first frame is sent then.
+
+The bundled `odd_core/cosmos_reason_vlm_adapter.py` samples the clip with PyAV, evenly across its whole length, at `--video-fps` (default 4) up to `--video-max-frames` (default 32) frames with a long side of at most `--video-max-dim` (default 768) pixels. vLLM and NIM endpoints sample the clip themselves.
+
 ### Outputs
 
 The output directory will contain:
 
 | File / Folder                                  | Purpose                                                                                                                                                           |
 |------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`variation_summary.json`**                   | Overall scene counts, threshold, and detected gap counts per attribute.                                                                                           |
+| **`variation_summary.json`**                   | Overall scene counts, configured thresholds by attribute, and detected gap counts.                                                                                |
 | **`variations_video_input.json`**              | Maps each missing ODD condition to suitable candidate base videos.                                                                                                |
 | **`wfm_generation_input.json`**                | Master scene synthesis specification passed to video transfer backends.                                                                                           |
 | **`final_gap_output.json`**                    | Executive summary containing overall ODD score, category scores, detected gaps, needed variation counts, and recommendations.                                     |
@@ -102,6 +108,8 @@ The output directory will contain:
 | **`<scene_id>/<scene_id>_var_..._prompt.txt`** | The same paragraph as plain text, next to the variation JSON it summarizes.                                                                                       |
 | **`Text_Annotations/`**                        | Directory containing base scene perception annotations extracted from videos.                                                                                     |
 | **`<scene_id>/` subfolders**                   | Folders for each base scene containing synthesized variation JSON files (e.g. `<scene_id>_var_sceneDetails_weatherType_foggy_run1.json`).                         |
+
+Gap generation uses each attribute's configured threshold, falling back to its category threshold. The CLI `--threshold` controls the overall dataset score status, not per-attribute gap generation. Every attribute must define a threshold directly or through its category. Variation sizing simulates the same completeness, coverage, and entropy score as the gap gate; it fails with the affected attribute if the solver cannot size a detected gap.
 
 ### Generation prompts
 
@@ -162,7 +170,7 @@ uv run odd_core/cosmos_reason_vlm_adapter.py --port 8010 &
 docker run --rm --network host \
   -v /path/to/videos:/input:ro \
   -v /path/to/output:/output \
-  -e VLM_URL="http://localhost:8010/v1" \
+  -e VLM_URL="http://127.0.0.1:8010/v1" \
   odd-component:latest \
   --input-dir /input \
   --output-dir /output
@@ -209,21 +217,23 @@ ODD_INPUT_DIR=/path/to/dataset ODD_HOST_VIDEO_DIR=/path/to/dataset/physical_ai_v
 
 ## 5. CLI Arguments & Environment Variables
 
-| CLI Argument              | Environment Variable  | Default                               | Description                                                |
-|---------------------------|-----------------------|---------------------------------------|------------------------------------------------------------|
-| `--input-dir`, `-i`       | `INPUT_DIR`           | `/input`                              | Directory containing video files / annotations             |
-| `--output-dir`, `-o`      | `OUTPUT_DIR`          | `/output`                             | Destination directory for ODD outputs                      |
-| `--annotations-dir`, `-a` | `ANNOTATIONS_DIR`     | `None` (auto-detect)                  | Path to existing annotations directory                     |
-| `--threshold`, `-t`       | `ODD_SCORE_THRESHOLD` | `0.8`                                 | Minimum ODD score threshold                                |
-| `--vlm-url`               | `VLM_URL`             | `http://host.docker.internal:8010/v1` | URL of OpenAI-compatible VLM endpoint                      |
-| `--vlm-model`             | `VLM_MODEL`           | `nvidia/Cosmos-Reason2-2B`            | VLM model identifier                                       |
-| `--vlm-timeout`           | `VLM_TIMEOUT`         | `120.0`                               | Timeout in seconds for VLM inference                       |
-| `--qa-template`           | -                     | `configs/qa_template.json`            | Path to QA template JSON                                   |
-| `--spec-file`             | -                     | `configs/odd_coverage_spec.json`      | Path to ODD specification JSON                             |
-| `--host-video-dir`        | `HOST_VIDEO_DIR`      | `None`                                | Host video path prefix to write to output configs          |
-| `--mock-vlm`              | `MOCK_VLM`            | `False`                               | Force heuristic mock perception for offline testing        |
-| `--no-auto-fallback`      | -                     | `False`                               | Fail if VLM endpoint is offline instead of fallback        |
-| `--no-generation-prompts` | -                     | `False`                               | Skip writing one text prompt paragraph per scene variation |
+| CLI Argument              | Environment Variable  | Default                               | Description                                                        |
+|---------------------------|-----------------------|---------------------------------------|--------------------------------------------------------------------|
+| `--input-dir`, `-i`       | `INPUT_DIR`           | `/input`                              | Directory containing video files / annotations                     |
+| `--output-dir`, `-o`      | `OUTPUT_DIR`          | `/output`                             | Destination directory for ODD outputs                              |
+| `--annotations-dir`, `-a` | `ANNOTATIONS_DIR`     | `None` (auto-detect)                  | Path to existing annotations directory                             |
+| `--threshold`, `-t`       | `ODD_SCORE_THRESHOLD` | `0.8`                                 | Minimum overall ODD score for dataset status                       |
+| `--vlm-url`               | `VLM_URL`             | `http://host.docker.internal:8010/v1` | URL of OpenAI-compatible VLM endpoint                              |
+| `--vlm-model`             | `VLM_MODEL`           | `nvidia/Cosmos-Reason2-2B`            | VLM model identifier                                               |
+| `--vlm-timeout`           | `VLM_TIMEOUT`         | `120.0`                               | Timeout in seconds for VLM inference                               |
+| `--vlm-input`             | `VLM_INPUT`           | `video`                               | VLM input: the whole clip (`video`) or its first frame (`frame`)   |
+| `--vlm-max-video-mb`      | `VLM_MAX_VIDEO_MB`    | `32`                                  | Largest clip sent as it is; larger or non-MP4 clips are re-encoded |
+| `--qa-template`           | -                     | `configs/qa_template.json`            | Path to QA template JSON                                           |
+| `--spec-file`             | -                     | `configs/odd_coverage_spec.json`      | Path to ODD specification JSON                                     |
+| `--host-video-dir`        | `HOST_VIDEO_DIR`      | `None`                                | Host video path prefix to write to output configs                  |
+| `--mock-vlm`              | `MOCK_VLM`            | `False`                               | Force heuristic mock perception for offline testing                |
+| `--no-auto-fallback`      | -                     | `False`                               | Fail if VLM endpoint is offline instead of fallback                |
+| `--no-generation-prompts` | -                     | `False`                               | Skip writing one text prompt paragraph per scene variation         |
 
 ---
 

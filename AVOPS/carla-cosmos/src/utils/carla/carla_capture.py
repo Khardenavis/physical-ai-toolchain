@@ -208,7 +208,7 @@ def parse_args() -> argparse.Namespace:
     config_defaults = {str(key).replace("-", "_").replace(".", "_"): value for key, value in config_defaults.items()}
 
     parser = argparse.ArgumentParser(description=__doc__, parents=[pre_parser])
-    parser.add_argument("--host", default="localhost", help="CARLA server host.")
+    parser.add_argument("--host", default="127.0.0.1", help="CARLA server host.")
     parser.add_argument("--port", type=int, default=2000, help="CARLA RPC port.")
     parser.add_argument("--town", default="Town10HD", help="CARLA map/town to load.")
     parser.add_argument("--openscenario", default=None, help="OpenSCENARIO file path")

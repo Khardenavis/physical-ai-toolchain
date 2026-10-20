@@ -80,13 +80,16 @@ sdg_preflight() {
 # Usage: airflow_api METHOD PATH [JSON_BODY]; prints the response body.
 airflow_api() {
   local method="$1" path="$2" body="${3:-}" url header rc=0
-  url="${AIRFLOW_URL:-http://localhost:8080}"
+  url="${AIRFLOW_URL:-http://127.0.0.1:8080}"
   header="$(umask 077; mktemp)"
-  curl -fsS -X POST "$url/auth/token" -H 'Content-Type: application/json' \
-    -d "$(AF_USER="${AIRFLOW_USERNAME:-admin}" AF_PASS="${AIRFLOW_PASSWORD:-admin}" python3 -c \
-      'import json,os; print(json.dumps({"username":os.environ["AF_USER"],"password":os.environ["AF_PASS"]}))')" \
+  AF_USER="${AIRFLOW_USERNAME:-admin}" \
+  AF_PASS="${AIRFLOW_PASSWORD:-admin}" \
+  python3 -c 'import json,os; print(json.dumps({"username":os.environ["AF_USER"],"password":os.environ["AF_PASS"]}))' \
+    | curl -fsS -X POST "$url/auth/token" \
+            -H 'Content-Type: application/json' --data-binary @- \
     | python3 -c 'import json,sys; print("Authorization: Bearer " + json.load(sys.stdin)["access_token"])' \
-    > "$header" || { rm -f "$header"; fatal "Authentication failed at $url (is port-forward running?)"; }
+    > "$header" \
+    || { rm -f "$header"; fatal "Authentication failed at $url"; }
   if [[ -n "$body" ]]; then
     curl -fsS -X "$method" "$url$path" -H @"$header" -H 'Content-Type: application/json' -d "$body" || rc=$?
   else
@@ -163,8 +166,9 @@ odd_run() {
   [[ "${ODD_MOCK_VLM:-0}" == "1" ]] && args+=(--mock-vlm)
   sdg_run docker run --rm --network host --user "$(id -u):$(id -g)" \
     -v "$input_dir:/input:ro" -v "$output_dir:/output" \
-    -e "VLM_URL=${ODD_VLM_URL:-http://localhost:8010/v1}" \
+    -e "VLM_URL=${ODD_VLM_URL:-http://127.0.0.1:8010/v1}" \
     -e "VLM_MODEL=${ODD_VLM_MODEL:-nvidia/Cosmos-Reason2-2B}" \
+    -e "VLM_INPUT=${ODD_VLM_INPUT:-video}" \
     "$image" "${args[@]}"
 }
 

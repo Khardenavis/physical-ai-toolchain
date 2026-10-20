@@ -3,7 +3,7 @@
 
 """ODD Scene Variation & Coverage Analysis Package."""
 
-from .annotator import VLMAnnotator, clean_reasoning_tags, extract_first_frame_b64
+from .annotator import VLMAnnotator, clean_reasoning_tags, encode_video_b64, extract_first_frame_b64
 from .engine import (
     BASE_VIDEO_FILTERS,
     QA_SPEC_ATTRIBUTE_ALIASES,
@@ -37,6 +37,7 @@ __all__ = [
     "build_category_summary",
     "calculate_needed_variations",
     "clean_reasoning_tags",
+    "encode_video_b64",
     "extract_first_frame_b64",
     "filter_spec_by_qa_template",
     "format_category_summary",

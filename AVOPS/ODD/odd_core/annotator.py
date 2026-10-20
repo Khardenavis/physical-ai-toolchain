@@ -3,9 +3,9 @@
 
 """VLM Annotation Pipeline for ODD Video Datasets.
 
-Extracts keyframes from driving videos, queries OpenAI-compatible VLM endpoints
-(e.g., Cosmos-Reason2-2B, Cosmos-Reason1-7B, or vLLM-OMNI), and parses structured
-answers against an ODD QA template.
+Sends each driving clip to an OpenAI-compatible VLM endpoint (e.g., Cosmos-Reason2-2B,
+Cosmos-Reason1-7B, or vLLM-OMNI) as a ``video_url`` and parses structured answers against an ODD QA
+template. The first frame can be sent instead (``media="frame"``) for endpoints without video input.
 """
 
 from __future__ import annotations
@@ -16,10 +16,14 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+MEDIA_MODES = ("video", "frame")
+DEFAULT_MAX_VIDEO_BYTES = 32 * 1024 * 1024
 
 
 def extract_first_frame_b64(video_path: str | Path, max_dim: int = 768) -> str:
@@ -92,6 +96,41 @@ def extract_first_frame_b64(video_path: str | Path, max_dim: int = 768) -> str:
     raise ValueError(f"Could not extract keyframe from video: {v_path}")
 
 
+def encode_video_b64(
+    video_path: str | Path, max_bytes: int = DEFAULT_MAX_VIDEO_BYTES, max_dim: int = 768
+) -> str:
+    """Return the whole clip as a base64 MP4.
+
+    The file is sent as it is. It is re-encoded with ffmpeg (no audio, long side at most ``max_dim``)
+    only when it is not an MP4 or is larger than ``max_bytes``.
+    """
+    v_path = Path(video_path)
+    if not v_path.exists():
+        raise FileNotFoundError(f"Video file does not exist: {v_path}")
+
+    if v_path.suffix.lower() == ".mp4" and v_path.stat().st_size <= max_bytes:
+        return base64.b64encode(v_path.read_bytes()).decode("utf-8")
+
+    scale = f"scale='if(gt(iw,ih),min({max_dim},iw),-2)':'if(gt(iw,ih),-2,min({max_dim},ih))'"
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "clip.mp4"
+        cmd = ["ffmpeg", "-y", "-i", str(v_path), "-an", "-vf", scale, "-c:v", "libx264"]
+        cmd += ["-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(target)]
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = getattr(exc, "stderr", b"") or b""
+            raise ValueError(
+                f"Could not re-encode {v_path.name}: {exc} {detail.decode(errors='replace')[-300:]}"
+            ) from exc
+        if target.stat().st_size > max_bytes:
+            raise ValueError(
+                f"{v_path.name} is {target.stat().st_size / 1e6:.1f} MB after re-encoding; "
+                f"the limit is {max_bytes / 1e6:.0f} MB"
+            )
+        return base64.b64encode(target.read_bytes()).decode("utf-8")
+
+
 def clean_reasoning_tags(text: str) -> str:
     """Strip <think>...</think> and <thought>...</thought> reasoning blocks from text."""
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
@@ -104,11 +143,17 @@ class VLMAnnotator:
 
     def __init__(
         self,
-        endpoint_url: str = "http://localhost:8010/v1",
+        endpoint_url: str = "http://127.0.0.1:8010/v1",
         model_name: str = "nvidia/Cosmos-Reason2-2B",
         api_key: str | None = None,
         timeout: float = 120.0,
+        media: str = "video",
+        max_video_bytes: int = DEFAULT_MAX_VIDEO_BYTES,
     ) -> None:
+        if media not in MEDIA_MODES:
+            raise ValueError(f"media must be one of {MEDIA_MODES}, got {media!r}")
+        self.media = media
+        self.max_video_bytes = max_video_bytes
         self.endpoint_url = endpoint_url.rstrip("/")
         self.model_name = model_name
         self.api_key = api_key or os.environ.get("VLM_API_KEY", "not-used")
@@ -150,6 +195,16 @@ class VLMAnnotator:
 
         return False, f"Could not reach {self.endpoint_url}"
 
+    def _media_part(self, video_path: Path) -> dict[str, Any]:
+        """Chat content part carrying the clip (or its first frame) for the VLM."""
+        if self.media == "video":
+            b64 = encode_video_b64(video_path, max_bytes=self.max_video_bytes)
+            return {"type": "video_url", "video_url": {"url": f"data:video/mp4;base64,{b64}"}}
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{extract_first_frame_b64(video_path)}"},
+        }
+
     def annotate_video(
         self,
         video_path: str | Path,
@@ -174,18 +229,18 @@ class VLMAnnotator:
         annotation_data: dict[str, Any] = {}
 
         # Check if remote VLM can be used
-        image_b64 = None
-        try:
-            image_b64 = extract_first_frame_b64(v_path)
-        except Exception as e:
-            if not fallback_mock:
-                raise RuntimeError(f"Failed to extract frame from {v_path.name}: {e}") from e
-            logger.warning("Frame extraction failed for %s, will use mock annotations: %s", v_path.name, e)
+        media_part: dict[str, Any] | None = None
+        if not fallback_mock:
+            try:
+                media_part = self._media_part(v_path)
+            except Exception as e:
+                raise RuntimeError(f"Failed to prepare {self.media} input from {v_path.name}: {e}") from e
 
-        if image_b64 and not fallback_mock:
+        if media_part and not fallback_mock:
             self.initialize()
+            scene = "driving video clip" if self.media == "video" else "driving scene image"
             questions_text = "\n".join([f"- {fq['flat_key']}: {fq['question']}" for fq in flat_questions])
-            batch_prompt = f"""Analyze the driving scene image and answer the following questions.
+            batch_prompt = f"""Analyze the {scene} and answer the following questions.
 Return your output ONLY as a JSON object where the keys are the question IDs and the values are the answers.
 
 Questions:
@@ -211,13 +266,7 @@ Respond with ONLY the valid JSON object."""
                         },
                         {
                             "role": "user",
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
-                                },
-                                {"type": "text", "text": batch_prompt},
-                            ],
+                            "content": [media_part, {"type": "text", "text": batch_prompt}],
                         },
                     ],
                     temperature=0.1,
@@ -256,13 +305,7 @@ Respond with ONLY the valid JSON object."""
                             messages=[
                                 {
                                     "role": "user",
-                                    "content": [
-                                        {
-                                            "type": "image_url",
-                                            "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
-                                        },
-                                        {"type": "text", "text": fq["question"]},
-                                    ],
+                                    "content": [media_part, {"type": "text", "text": fq["question"]}],
                                 }
                             ],
                             temperature=0.1,

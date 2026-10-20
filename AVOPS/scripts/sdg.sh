@@ -19,7 +19,7 @@ Commands:
   build              Build and push the Airflow controller image
   install            Install or upgrade the SDG controller
   run                preflight + setup + nfs + build + install
-  port-forward       Forward the Airflow UI to http://localhost:8080
+  port-forward       Forward the Airflow UI to http://127.0.0.1:8080
   trigger <payload>  Trigger the DAG (SDG_DAG_ID) with a JSON payload file
   odd-build          Build the ODD gap-analysis image (AVOPS/ODD)
   odd <in> <out>     Run the ODD container on a directory of videos
@@ -44,7 +44,7 @@ trigger() {
   [[ -f "$payload" ]] || [[ -f "$SDG_WORKFLOW_DIR/$payload" ]] || fatal "Payload not found: $payload"
   [[ -f "$payload" ]] || payload="$SDG_WORKFLOW_DIR/$payload"
 
-  local url="${AIRFLOW_URL:-http://localhost:8080}"
+  local url="${AIRFLOW_URL:-http://127.0.0.1:8080}"
   local dag="${SDG_DAG_ID:-autonomous_vehicle_dataset_generation_dag_k8s}"
   if [[ "$DRY_RUN" == "1" ]]; then
     printf '[DRY-RUN] POST %s/api/v2/dags/%s/dagRuns with %s\n' "$url" "$dag" "$payload"
@@ -160,7 +160,7 @@ case "$cmd" in
     sdg_make install-nfs
     sdg_make build-sdg-controller
     sdg_make install-sdg-controller
-    info "Done. Run: sdg.sh port-forward  (UI at http://localhost:8080)"
+    info "Done. Run: sdg.sh port-forward  (UI at http://127.0.0.1:8080)"
     ;;
   port-forward) sdg_make port-forward ;;
   trigger)      trigger "${args[1]:-}" ;;

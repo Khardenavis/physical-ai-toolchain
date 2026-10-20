@@ -41,7 +41,7 @@ QA_SPEC_ATTRIBUTE_ALIASES: dict[str, str] = {
 
 BASE_VIDEO_FILTERS: dict[str, dict[str, str]] = {
     "weather": {"weather": "sunny", "roadCondition": "dry", "visibility": "clear"},
-    "weatherType": {"weather": "sunny", "roadCondition": "dry", "visibility": "clear"},
+    "weatherType": {"weatherType": "sunny", "roadCondition": "dry", "visibility": "clear"},
     "visibility": {"visibility": "clear", "weather": "sunny"},
     "roadCondition": {"roadCondition": "dry", "weather": "sunny"},
     "egoVehicleTrajectory": {"egoVehicleTrajectory": "cruising"},
@@ -212,6 +212,45 @@ class AttributeReport:
         }
 
 
+def _compute_odd_score(
+    distribution: Counter,
+    expected: Sequence[str],
+    total: int,
+    completeness_weight: float,
+    coverage_weight: float,
+    entropy_weight: float,
+) -> float:
+    filled = sum(distribution.values())
+    completeness = float(filled / total) if total else 0.0
+
+    support = len(expected) if expected else len(distribution)
+    if support <= 0 or filled <= 0:
+        coverage = 0.0
+        entropy = 0.0
+    else:
+        balance_threshold = filled / support
+        coverage = float(
+            min(sum(min(count, balance_threshold) for count in distribution.values()) / filled, 1.0)
+        )
+
+        entropy_value = 0.0
+        for count in distribution.values():
+            probability = count / filled
+            if probability > 0:
+                entropy_value -= probability * math.log10(probability)
+        max_entropy = math.log10(support) if support > 1 else 0.0
+        if max_entropy > 0:
+            entropy = float(min(max(entropy_value / max_entropy, 0.0), 1.0))
+        else:
+            entropy = 1.0 if support == 1 else 0.0
+
+    return (
+        completeness * completeness_weight
+        + coverage * coverage_weight
+        + entropy * entropy_weight
+    )
+
+
 # =====================================================================
 # 3. ODD COVERAGE ENGINE
 # =====================================================================
@@ -328,17 +367,17 @@ class ODDCoverageEngine:
             normalize_attribute_string(candidate), spec.expected_values
         )
 
-    def _canonicalize_value(self, value: str, expected: Sequence[str]) -> str:
+    def _canonicalize_value(self, value: str, expected: Sequence[str]) -> str | None:
         if value in self.config.synonyms:
             return self.config.synonyms[value]
         if value in expected:
             return value
-
+        # If no match is found, return None
         for item in expected:
             clean = item.replace("_", " ")
-            if value == clean or clean in value or value in clean:
+            if value == clean:
                 return item
-        return value
+        return None
 
     def _flatten_answers(
         self, annotation: Any, prefix: str | None = None
@@ -377,10 +416,13 @@ class ODDCoverageEngine:
         )
         completeness = float(filled / total) if total else 0.0
 
-        score = (
-            completeness * self.config.completeness_weight
-            + coverage * self.config.coverage_weight
-            + entropy * self.config.entropy_weight
+        score = _compute_odd_score(
+            distribution,
+            attribute_spec.expected_values,
+            total,
+            self.config.completeness_weight,
+            self.config.coverage_weight,
+            self.config.entropy_weight,
         )
 
         full_dist = Counter({v: 0 for v in attribute_spec.expected_values})
@@ -511,27 +553,60 @@ def calculate_needed_variations(
     distribution: dict[str, int],
     expected_values: list[str],
     target_score: float,
-    max_iterations: int = 1000,
+    *,
+    total_count: int,
+    completeness_weight: float = 0.3,
+    coverage_weight: float = 0.35,
+    entropy_weight: float = 0.35,
 ) -> dict[str, int]:
-    """Entropy delta solver simulating added target values to bridge ODD coverage score gaps."""
+    """Simulate balanced additions until the composite ODD score meets the target."""
     if not expected_values:
         return {}
 
-    dist = Counter({val: int(distribution.get(val, 0)) for val in expected_values})
+    dist = Counter({val: int(count) for val, count in distribution.items()})
+    dist.update({val: 0 for val in expected_values})
+    filled = sum(dist.values())
+    dataset_size = total_count
+    if dataset_size < filled:
+        raise ValueError("total_count cannot be smaller than the filled distribution count.")
 
-    def get_score(sim_dist: Counter) -> float:
-        filled = sum(sim_dist.values())
-        if filled <= 0 or len(sim_dist) <= 0:
-            return 0.0
-        threshold = filled / len(sim_dist)
-        return sum(min(count, threshold) for count in sim_dist.values()) / filled
+    def get_score(sim_dist: Counter, added_count: int) -> float:
+        return _compute_odd_score(
+            sim_dist,
+            expected_values,
+            dataset_size + added_count,
+            completeness_weight,
+            coverage_weight,
+            entropy_weight,
+        )
 
-    if get_score(dist) >= target_score:
+    if get_score(dist, 0) >= target_score - 1e-12:
         return {}
 
+    missing_count = dataset_size - filled
+    max_score = completeness_weight + coverage_weight + entropy_weight
+    if target_score > max_score:
+        return {}
+
+    max_target_count = max(dist.values(), default=0)
+    non_completeness_score = coverage_weight + entropy_weight
+    if completeness_weight > 0:
+        # Bound equalization by the completeness required if coverage and entropy reach 1.
+        required_completeness = (target_score - non_completeness_score) / completeness_weight
+        if required_completeness >= 1.0 and missing_count > 0:
+            return {}
+        if 0.0 < required_completeness < 1.0:
+            additional_count = math.ceil(
+                max(
+                    0.0,
+                    (required_completeness * dataset_size - filled)
+                    / (1.0 - required_completeness),
+                )
+            )
+            max_target_count += additional_count
+
     needed: dict[str, int] = {}
-    target_count = 1
-    for _ in range(max_iterations):
+    for target_count in range(1, max_target_count + 1):
         sim_dist = Counter(dist)
         temp_needed: dict[str, int] = {}
         for val in expected_values:
@@ -540,10 +615,10 @@ def calculate_needed_variations(
                 sim_dist[val] = target_count
                 temp_needed[val] = target_count - curr_count
 
-        if get_score(sim_dist) >= target_score:
+        added_count = sum(temp_needed.values())
+        if get_score(sim_dist, added_count) >= target_score - 1e-12:
             needed = temp_needed
             break
-        target_count += 1
 
     return needed
 
@@ -664,7 +739,7 @@ def load_scenes_from_annotations(
 
         video_path = None
         for vfile in video_files:
-            if scene_id in vfile.name or vfile.stem == scene_id:
+            if vfile.stem == scene_id:
                 video_path = str(vfile)
                 break
 
@@ -731,10 +806,22 @@ def modify_annotation_for_attribute(
     return updated
 
 
+def _resolve_attribute_threshold(
+    attribute_spec: AttributeSpec, category_spec: CategorySpec
+) -> float:
+    if attribute_spec.threshold is not None:
+        return attribute_spec.threshold
+    if category_spec.threshold is not None:
+        return category_spec.threshold
+    raise ValueError(
+        f"No threshold configured for ODD attribute '{attribute_spec.name}' "
+        f"in category '{category_spec.name}'."
+    )
+
+
 def generate_variations_for_gaps(
     annotation_dir: str | Path,
     output_dir: str | Path,
-    odd_score_threshold: float,
     spec_path: str | Path,
     video_dir: str | Path | None = None,
     qa_template_path: str | Path | None = None,
@@ -761,9 +848,43 @@ def generate_variations_for_gaps(
     else:
         config = ODDCoverageConfig.load(spec_path)
 
+    thresholds = {
+        category_name: {
+            attribute_name: _resolve_attribute_threshold(attribute_spec, category_spec)
+            for attribute_name, attribute_spec in category_spec.attributes.items()
+        }
+        for category_name, category_spec in config.categories.items()
+    }
+
     engine = ODDCoverageEngine(config)
     engine.load_dataset(records)
     report = engine.analyze()
+
+    needed_variations: dict[str, dict[str, dict[str, int]]] = {}
+    for category_name, category_spec in config.categories.items():
+        needed_variations[category_name] = {}
+        for attribute_name, attribute_spec in category_spec.attributes.items():
+            attr_report = report["attributes"].get(attribute_name)
+            threshold = thresholds[category_name][attribute_name]
+            needed: dict[str, int] = {}
+            if attr_report and attr_report["odd_score"] < threshold:
+                needed = calculate_needed_variations(
+                    attr_report["distribution"],
+                    attribute_spec.expected_values,
+                    threshold,
+                    total_count=attr_report["total"],
+                    completeness_weight=config.completeness_weight,
+                    coverage_weight=config.coverage_weight,
+                    entropy_weight=config.entropy_weight,
+                )
+                if not needed:
+                    raise RuntimeError(
+                        f"ODD gap sizing returned no variations for attribute "
+                        f"'{attribute_name}' in category '{category_name}' "
+                        f"(score={attr_report['odd_score']}, threshold={threshold}, "
+                        f"dataset_size={attr_report['total']})."
+                    )
+            needed_variations[category_name][attribute_name] = needed
 
     variation_sets: dict[str, list[dict[str, Any]]] = {}
     total_variations = 0
@@ -775,25 +896,15 @@ def generate_variations_for_gaps(
             if not attr_report:
                 continue
 
-            threshold = (
-                attribute_spec.threshold
-                or category_spec.threshold
-                or odd_score_threshold
-            )
+            threshold = thresholds[category_name][attribute_name]
             odd_score = attr_report["odd_score"]
-            if odd_score < threshold:
-                needed = calculate_needed_variations(
-                    attr_report["distribution"],
-                    attribute_spec.expected_values,
-                    threshold,
-                )
-                if not needed:
-                    continue
-
+            needed = needed_variations[category_name][attribute_name]
+            if needed:
                 category_variations.append(
                     {
                         "attribute": attribute_name,
                         "odd_score": odd_score,
+                        "threshold": threshold,
                         "needed_variations": needed,
                     }
                 )
@@ -826,7 +937,7 @@ def generate_variations_for_gaps(
     # 1. Save variation_summary.json
     summary_data = {
         "dataset_scenes_count": len(records),
-        "odd_score_threshold": odd_score_threshold,
+        "thresholds": thresholds,
         "total_variations_generated": total_variations,
         "variation_sets": variation_sets,
     }
@@ -852,18 +963,8 @@ def generate_variations_for_gaps(
             video_json_data["categories"][category_name][attribute_name] = {}
 
             attr_report = report["attributes"].get(attribute_name)
-            threshold = (
-                attribute_spec.threshold
-                or category_spec.threshold
-                or odd_score_threshold
-            )
-            needed = {}
-            if attr_report and attr_report["odd_score"] < threshold:
-                needed = calculate_needed_variations(
-                    attr_report["distribution"],
-                    attribute_spec.expected_values,
-                    threshold,
-                )
+            threshold = thresholds[category_name][attribute_name]
+            needed = needed_variations[category_name][attribute_name]
 
             for val in attribute_spec.expected_values:
                 count = needed.get(val, 0)
@@ -894,7 +995,7 @@ def generate_variations_for_gaps(
 
     wfm_input_data = {
         "dataset_scenes_count": len(records),
-        "odd_score_threshold": odd_score_threshold,
+        "thresholds": thresholds,
         "total_variations_generated": total_variations,
         "generation_gaps": wfm_gaps,
     }

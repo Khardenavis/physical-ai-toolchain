@@ -5,7 +5,8 @@
         "source_keys": [
           "weather",
           "weather_condition",
-          "weather type"
+          "weather type",
+          "weatherType"
         ],
         "expected_values": [
           "sunny",

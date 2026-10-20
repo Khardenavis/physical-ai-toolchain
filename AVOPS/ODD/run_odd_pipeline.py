@@ -81,12 +81,12 @@ def parse_args():
         "-t",
         type=float,
         default=float(os.environ.get("ODD_SCORE_THRESHOLD", "0.8")),
-        help="ODD score threshold for gap detection (e.g. 0.8)",
+        help="Overall dataset ODD score threshold for status reporting (e.g. 0.8)",
     )
     parser.add_argument(
         "--vlm-url",
         default=os.environ.get("VLM_URL", "http://host.docker.internal:8010/v1"),
-        help="OpenAI-compatible VLM endpoint URL (e.g. http://localhost:8010/v1)",
+        help="OpenAI-compatible VLM endpoint URL (e.g. http://127.0.0.1:8010/v1)",
     )
     parser.add_argument(
         "--vlm-model",
@@ -98,6 +98,18 @@ def parse_args():
         type=float,
         default=float(os.environ.get("VLM_TIMEOUT", "120.0")),
         help="Timeout in seconds for VLM inference calls",
+    )
+    parser.add_argument(
+        "--vlm-input",
+        choices=("video", "frame"),
+        default=os.environ.get("VLM_INPUT", "video"),
+        help="What the VLM sees: the whole clip (video) or only its first frame (frame)",
+    )
+    parser.add_argument(
+        "--vlm-max-video-mb",
+        type=float,
+        default=float(os.environ.get("VLM_MAX_VIDEO_MB", "32")),
+        help="Largest clip sent to the VLM as it is; larger clips are re-encoded smaller",
     )
     parser.add_argument(
         "--qa-template",
@@ -117,7 +129,6 @@ def parse_args():
     parser.add_argument(
         "--mock-vlm",
         action="store_true",
-        default=os.environ.get("MOCK_VLM", "0") in ("1", "true", "True"),
         help="Force mock perception annotator (for offline simulation / tests)",
     )
     parser.add_argument(
@@ -125,18 +136,6 @@ def parse_args():
         dest="generation_prompts",
         action="store_false",
         help="Skip writing one text prompt paragraph per scene variation",
-    )
-    parser.add_argument(
-        "--auto-fallback",
-        action="store_true",
-        default=True,
-        help="Auto-fallback to mock annotator if VLM endpoint is unreachable",
-    )
-    parser.add_argument(
-        "--no-auto-fallback",
-        dest="auto_fallback",
-        action="store_false",
-        help="Fail with error if VLM endpoint is unreachable",
     )
 
     return parser.parse_args()
@@ -267,6 +266,8 @@ def main():
         endpoint_url=args.vlm_url,
         model_name=args.vlm_model,
         timeout=args.vlm_timeout,
+        media=args.vlm_input,
+        max_video_bytes=int(args.vlm_max_video_mb * 1024 * 1024),
     )
 
     vlm_healthy, health_msg = annotator.check_health()
@@ -350,7 +351,6 @@ def main():
     result = generate_variations_for_gaps(
         annotation_dir=str(annotations_out_dir),
         output_dir=str(output_dir),
-        odd_score_threshold=args.threshold,
         spec_path=str(spec_path),
         video_dir=str(input_dir),
         qa_template_path=str(qa_template_path),
@@ -400,7 +400,7 @@ def main():
                 "category": cat_name,
                 "attribute": attr_name,
                 "odd_score": round(score, 4),
-                "threshold": args.threshold,
+                "threshold": item["threshold"],
                 "status": "GAP",
                 "needed_variations": needed,
                 "total_needed": total_needed,

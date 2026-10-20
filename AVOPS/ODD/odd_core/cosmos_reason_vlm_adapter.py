@@ -2,6 +2,21 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "accelerate==1.12.0",
+#     "av==16.0.1",
+#     "fastapi==0.115.12",
+#     "numpy==2.2.6",
+#     "pillow==12.0.0",
+#     "torch==2.9.1",
+#     "torchvision==0.24.1",
+#     "transformers==4.57.3",
+#     "uvicorn==0.34.2",
+# ]
+# ///
+
 """
 Cosmos-Reason2-2B → OpenAI-compatible VLM adapter server.
 
@@ -16,11 +31,19 @@ Usage (run outside the Docker container, from ``AVOPS/ODD``)::
         --port 8010
 
     # Then point config_starter.yaml at:
-    #   endpoints.vlm.url: "http://localhost:8010/v1"
+    #   endpoints.vlm.url: "http://127.0.0.1:8010/v1"
     #   endpoints.vlm.model: "nvidia/Cosmos-Reason2-2B"
 
-Requires (auto-installed by uv if not present):
-    pip install fastapi uvicorn torch transformers accelerate pillow
+Dependencies are pinned in the PEP 723 metadata above. ``uv run`` installs
+them in an isolated script environment rather than using the repo-root project.
+
+Processor setup and generation/decode flow follow NVIDIA's Cosmos-Reason2
+inference sample (Apache-2.0):
+https://github.com/nvidia-cosmos/cosmos-reason2/blob/main/scripts/inference_sample.py
+
+Video input: ``video_url`` content parts (``data:video/...;base64`` URLs) are decoded with PyAV and
+sampled across the whole clip at ``--video-fps`` (at most ``--video-max-frames`` frames, long side
+at most ``--video-max-dim``); ``image_url`` parts are passed as single images.
 
 Note: This adapter is the lightweight alternative to running vLLM-OMNI.
 vLLM-OMNI is preferred for production (batch scheduling, continuous batching,
@@ -37,6 +60,7 @@ import re
 import time
 import uuid
 import warnings
+from dataclasses import dataclass
 from io import BytesIO
 from typing import Annotated, Any
 
@@ -44,10 +68,10 @@ from fastapi import Body
 
 warnings.filterwarnings("ignore")
 
-# Default cache directory: the models/ folder two levels above this module
+# Default cache directory: the default hugging face cache directory
 DEFAULT_CACHE_DIR = os.environ.get(
-    "COSMOS_MODEL_CACHE_DIR",
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models")),
+    "HF_HOME",
+    os.path.expanduser("~/.cache/huggingface"),
 )
 
 # --- Lazy imports so the module is importable without heavy deps ------------
@@ -57,6 +81,22 @@ _model_name: str = "nvidia/Cosmos-Reason2-2B"
 _cache_dir: str = DEFAULT_CACHE_DIR
 
 PIXELS_PER_TOKEN = 32**2
+
+DEFAULT_VIDEO_FPS = 4.0
+DEFAULT_VIDEO_MAX_FRAMES = 32
+DEFAULT_VIDEO_MAX_DIM = 768
+
+
+@dataclass
+class VideoOptions:
+    """How a clip is sampled before it is given to the model."""
+
+    fps: float = DEFAULT_VIDEO_FPS
+    max_frames: int = DEFAULT_VIDEO_MAX_FRAMES
+    max_dim: int = DEFAULT_VIDEO_MAX_DIM
+
+
+_video_options = VideoOptions()
 
 
 def _load_single_model(
@@ -100,7 +140,6 @@ def _load_single_model(
         "dtype": torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
         "device_map": "auto",
         "attn_implementation": "sdpa",
-        "trust_remote_code": True,
         "cache_dir": resolved_cache_dir,
     }
     if hf_token:
@@ -114,11 +153,12 @@ def _load_single_model(
     try:
         model = ModelClass.from_pretrained(
             model_target,
+            revision="9ce19a19",
             **load_kwargs,
         )
         processor = transformers.AutoProcessor.from_pretrained(
             model_target,
-            trust_remote_code=True,
+            revision="9ce19a19",
             cache_dir=resolved_cache_dir,
             token=load_kwargs["token"],
         )
@@ -177,31 +217,75 @@ def _load_model(
     _model_name = model_name
 
 
-def _extract_image_from_message(content: list[dict[str, Any]]) -> Any | None:
-    """Pull the first image or video frame out of a chat message content list."""
+def _data_url_bytes(url: str) -> bytes:
+    if not url.startswith("data:"):
+        raise ValueError("Only data: URLs are supported for image_url and video_url content")
+    return base64.b64decode(url.split(",", 1)[1])
+
+
+def sample_video_frames(video_bytes: bytes, options: VideoOptions) -> tuple[Any, dict[str, Any]]:
+    """Sample frames evenly across the whole clip.
+
+    Returns an array of shape (frames, height, width, 3) and the metadata the processor needs
+    to time the frames: total frame count, effective fps, duration, and frame indices.
+    """
+    import av
+    import numpy as np
+
+    with av.open(BytesIO(video_bytes)) as container:
+        stream = container.streams.video[0]
+        source_fps = float(stream.average_rate or 30)
+        duration = float(container.duration / av.time_base) if container.duration else (stream.frames or 1) / source_fps
+        count = max(1, min(options.max_frames, round(duration * options.fps)))
+        targets = [(index + 0.5) * duration / count for index in range(count)]
+        frames: list[Any] = []
+        for frame in container.decode(stream):
+            timestamp = float(frame.pts * stream.time_base) if frame.pts is not None else 0.0
+            while len(frames) < count and timestamp >= targets[len(frames)]:
+                scale = min(1.0, options.max_dim / max(frame.width, frame.height))
+                width = max(2, int(frame.width * scale) // 2 * 2)
+                height = max(2, int(frame.height * scale) // 2 * 2)
+                frames.append(frame.reformat(width=width, height=height, format="rgb24").to_ndarray())
+            if len(frames) >= count:
+                break
+    if not frames:
+        raise ValueError("The video has no decodable frames")
+    metadata = {
+        "total_num_frames": len(frames),
+        "fps": len(frames) / duration if duration > 0 else options.fps,
+        "duration": duration,
+        "frames_indices": list(range(len(frames))),
+    }
+    return np.stack(frames), metadata
+
+
+def _media_item(part: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Convert an image_url or video_url content part to a processor item and optional video metadata."""
     from PIL import Image
 
-    for part in content:
-        p_type = part.get("type")
-        if p_type == "image_url":
-            url: str = part["image_url"]["url"]
-            if url.startswith("data:"):
-                _, b64 = url.split(",", 1)
-                return Image.open(BytesIO(base64.b64decode(b64))).convert("RGB")
-        elif p_type == "video_url":
-            url: str = part["video_url"]["url"]
-            if url.startswith("data:"):
-                _, b64 = url.split(",", 1)
-                vid_bytes = base64.b64decode(b64)
-                try:
-                    import av
-                    with av.open(BytesIO(vid_bytes)) as container:
-                        if container.streams.video:
-                            for frame in container.decode(container.streams.video[0]):
-                                return frame.to_image().convert("RGB")
-                except Exception as e:
-                    print(f"[cosmos-reason-adapter] Video frame extraction error: {e}")
-    return None
+    if part["type"] == "image_url":
+        image = Image.open(BytesIO(_data_url_bytes(part["image_url"]["url"]))).convert("RGB")
+        return {"type": "image", "image": image}, None
+    frames, metadata = sample_video_frames(_data_url_bytes(part["video_url"]["url"]), _video_options)
+    return {"type": "video", "video": frames}, metadata
+
+
+def _apply_chat_template(conversation: list[dict[str, Any]], video_metadata: list[dict[str, Any]]) -> Any:
+    kwargs: dict[str, Any] = {
+        "tokenize": True,
+        "add_generation_prompt": True,
+        "return_dict": True,
+        "return_tensors": "pt",
+    }
+    if not video_metadata:
+        return _processor.apply_chat_template(conversation, **kwargs)
+    from transformers.video_utils import VideoMetadata
+
+    options = {"do_sample_frames": False, "video_metadata": [VideoMetadata(**m) for m in video_metadata]}
+    try:
+        return _processor.apply_chat_template(conversation, processor_kwargs=options, **kwargs)
+    except TypeError:  # transformers releases that take the options directly
+        return _processor.apply_chat_template(conversation, **options, **kwargs)
 
 
 def _run_inference(
@@ -211,7 +295,6 @@ def _run_inference(
 ) -> tuple[str, str]:
     """Run Cosmos-Reason2-2B inference from an OpenAI messages list."""
     import torch
-    from PIL import Image
 
     if _model is None or _processor is None:
         raise RuntimeError(f"Model {_model_name} not loaded")
@@ -220,41 +303,29 @@ def _run_inference(
     active_processor = _processor
     active_model_name = _model_name
 
-    # Build processor conversation — pull system + user turns
-    conversation = []
-    pil_image: Image.Image | None = None
+    # Build the processor conversation from the system and user turns
+    conversation: list[dict[str, Any]] = []
+    video_metadata: list[dict[str, Any]] = []
 
     for msg in messages:
         role = msg["role"]
         content = msg["content"]
 
         if isinstance(content, str):
-            conversation.append(
-                {
-                    "role": role,
-                    "content": [{"type": "text", "text": content}],
-                }
-            )
+            conversation.append({"role": role, "content": [{"type": "text", "text": content}]})
         elif isinstance(content, list):
-            # Extract image/frame if present
-            if pil_image is None:
-                pil_image = _extract_image_from_message(content)
-
-            text_parts = [p["text"] for p in content if p.get("type") == "text"]
-            proc_content: list[dict] = []
-            if pil_image is not None and role == "user":
-                proc_content.append({"type": "image", "image": pil_image})
-            proc_content.extend({"type": "text", "text": t} for t in text_parts)
+            proc_content: list[dict[str, Any]] = []
+            for part in content:
+                if part.get("type") == "text":
+                    proc_content.append({"type": "text", "text": part["text"]})
+                elif part.get("type") in ("image_url", "video_url"):
+                    item, metadata = _media_item(part)
+                    proc_content.append(item)
+                    if metadata is not None:
+                        video_metadata.append(metadata)
             conversation.append({"role": role, "content": proc_content})
 
-    # Process inputs
-    inputs = active_processor.apply_chat_template(
-        conversation,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_dict=True,
-        return_tensors="pt",
-    )
+    inputs = _apply_chat_template(conversation, video_metadata)
 
     inputs = inputs.to(active_model.device)
 
@@ -375,8 +446,8 @@ def main():
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Host to bind (default: 0.0.0.0)",
+        default="127.0.0.1",
+        help="Host to bind (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--max-gpu-memory",
@@ -386,7 +457,29 @@ def main():
             "If not set, uses available GPU memory."
         ),
     )
+    parser.add_argument(
+        "--video-fps",
+        type=float,
+        default=DEFAULT_VIDEO_FPS,
+        help=f"Frames per second sampled from video clips (default: {DEFAULT_VIDEO_FPS})",
+    )
+    parser.add_argument(
+        "--video-max-frames",
+        type=int,
+        default=DEFAULT_VIDEO_MAX_FRAMES,
+        help=f"Maximum frames sampled from one clip, across its whole length (default: {DEFAULT_VIDEO_MAX_FRAMES})",
+    )
+    parser.add_argument(
+        "--video-max-dim",
+        type=int,
+        default=DEFAULT_VIDEO_MAX_DIM,
+        help=f"Longest side in pixels of sampled frames (default: {DEFAULT_VIDEO_MAX_DIM})",
+    )
     args = parser.parse_args()
+
+    _video_options.fps = args.video_fps
+    _video_options.max_frames = args.video_max_frames
+    _video_options.max_dim = args.video_max_dim
 
     _load_model(
         model_name=args.model,

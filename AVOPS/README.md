@@ -40,29 +40,29 @@ AVOPS/scripts/sdg.sh run
 AVOPS/scripts/sdg.sh port-forward
 ```
 
-The Airflow UI is available at <http://localhost:8080> while port forwarding is active. `--dry-run` prints the external `make` commands without executing them. It still validates the environment and required configuration.
+The Airflow UI is available at <http://127.0.0.1:8080> while port forwarding is active. `--dry-run` prints the external `make` commands without executing them. It still validates the environment and required configuration.
 
 ## ⚙️ Configuration
 
 `AVOPS/configs/sdg.env.example` lists the supported settings. Copy it to `AVOPS/configs/sdg.env`; the local file is excluded from Git.
 
-| Setting                                                                                    | Required | Purpose                                                                                 |
-|--------------------------------------------------------------------------------------------|---------:|-----------------------------------------------------------------------------------------|
-| `SDG_WORKFLOW_DIR`                                                                         |      Yes | Absolute path to the external SDG workflow checkout                                     |
-| `KUBECONFIG`                                                                               |      Yes | Path to the kubeconfig file for the target cluster                                      |
-| `NGC_API_KEY`                                                                              |      Yes | NVIDIA NGC authentication                                                               |
-| `HF_TOKEN`                                                                                 |      Yes | Hugging Face model-download authentication                                              |
-| `OSMO_TOKEN`, `VLM_API_KEY`, `LLM_API_KEY`                                                 |       No | Optional workflow service credentials                                                   |
-| `AWS_S3_BUCKET`, `AWS_S3_REGION`, `AWS_S3_ACCESS_KEY_ID`, `AWS_S3_SECRET_ACCESS_KEY`       |       No | Optional S3 storage settings                                                            |
-| `AIRFLOW_IMAGE_REPOSITORY`, `AIRFLOW_IMAGE_TAG`                                            |       No | Airflow controller image overrides                                                      |
-| `NFS_NAMESPACE`, `NFS_STORAGE_CLASS`, `NFS_EXPORT_PATH`, `NFS_NODE_HOSTNAME`, `NFS_SERVER` |       No | NFS storage settings                                                                    |
-| `AIRFLOW_URL`                                                                              |       No | Airflow REST API URL; defaults to `http://localhost:8080`                               |
-| `AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`                                                     |       No | Airflow REST API credentials                                                            |
-| `SDG_DAG_ID`                                                                               |       No | DAG to trigger; defaults to `autonomous_vehicle_dataset_generation_dag_k8s`             |
-| `ODD_IMAGE`, `ODD_VLM_URL`, `ODD_VLM_MODEL`, `ODD_THRESHOLD`, `ODD_MOCK_VLM`               |       No | ODD container image, VLM endpoint and model, gap threshold, and offline mock perception |
-| `ODD_MAX_RUNS`                                                                             |       No | Cap on generation runs started from ODD gaps; empty or `0` means no cap                 |
-| `CARLA_COSMOS_VIEWS`, `COSMOS_GPU_IDS`, `CARLA_GPU_ID`                                     |       No | CARLA backend camera views, Cosmos GPUs, and CARLA's GPU                                |
-| `SDG_POLL_INTERVAL`, `SDG_RUN_TIMEOUT`                                                     |       No | Seconds between DagRun state polls and the maximum wait per run                         |
+| Setting                                                                                       | Required | Purpose                                                                                                                        |
+|-----------------------------------------------------------------------------------------------|---------:|--------------------------------------------------------------------------------------------------------------------------------|
+| `SDG_WORKFLOW_DIR`                                                                            |      Yes | Absolute path to the external SDG workflow checkout                                                                            |
+| `KUBECONFIG`                                                                                  |      Yes | Path to the kubeconfig file for the target cluster                                                                             |
+| `NGC_API_KEY`                                                                                 |      Yes | NVIDIA NGC authentication                                                                                                      |
+| `HF_TOKEN`                                                                                    |      Yes | Hugging Face model-download authentication                                                                                     |
+| `OSMO_TOKEN`, `VLM_API_KEY`, `LLM_API_KEY`                                                    |       No | Optional workflow service credentials                                                                                          |
+| `AWS_S3_BUCKET`, `AWS_S3_REGION`, `AWS_S3_ACCESS_KEY_ID`, `AWS_S3_SECRET_ACCESS_KEY`          |       No | Optional S3 storage settings                                                                                                   |
+| `AIRFLOW_IMAGE_REPOSITORY`, `AIRFLOW_IMAGE_TAG`                                               |       No | Airflow controller image overrides                                                                                             |
+| `NFS_NAMESPACE`, `NFS_STORAGE_CLASS`, `NFS_EXPORT_PATH`, `NFS_NODE_HOSTNAME`, `NFS_SERVER`    |       No | NFS storage settings                                                                                                           |
+| `AIRFLOW_URL`                                                                                 |       No | Airflow REST API URL; defaults to `http://127.0.0.1:8080`                                                                      |
+| `AIRFLOW_USERNAME`, `AIRFLOW_PASSWORD`                                                        |       No | Airflow REST API credentials                                                                                                   |
+| `SDG_DAG_ID`                                                                                  |       No | DAG to trigger; defaults to `autonomous_vehicle_dataset_generation_dag_k8s`                                                    |
+| `ODD_IMAGE`, `ODD_VLM_URL`, `ODD_VLM_MODEL`, `ODD_VLM_INPUT`, `ODD_THRESHOLD`, `ODD_MOCK_VLM` |       No | ODD container image, VLM endpoint, model and input (`video` clip or first `frame`), gap threshold, and offline mock perception |
+| `ODD_MAX_RUNS`                                                                                |       No | Cap on generation runs started from ODD gaps; empty or `0` means no cap                                                        |
+| `CARLA_COSMOS_VIEWS`, `COSMOS_GPU_IDS`, `CARLA_GPU_ID`                                        |       No | CARLA backend camera views, Cosmos GPUs, and CARLA's GPU                                                                       |
+| `SDG_POLL_INTERVAL`, `SDG_RUN_TIMEOUT`                                                        |       No | Seconds between DagRun state polls and the maximum wait per run                                                                |
 
 Values exported in the shell take precedence over values in `sdg.env`. The loader reads simple `NAME=value` lines; keep secrets and environment-specific values out of tracked files.
 
@@ -78,7 +78,7 @@ Run `AVOPS/scripts/sdg.sh --help` to display the available commands.
 | `build`                     | Build and push the Airflow controller image                                                                                                               |
 | `install`                   | Install or upgrade the SDG controller                                                                                                                     |
 | `run`                       | Run preflight, setup, NFS installation, image build, and controller installation in order                                                                 |
-| `port-forward`              | Forward the Airflow UI to `http://localhost:8080`                                                                                                         |
+| `port-forward`              | Forward the Airflow UI to `http://127.0.0.1:8080`                                                                                                         |
 | `trigger <payload>`         | Submit a JSON payload to the configured Airflow DAG                                                                                                       |
 | `odd-build`                 | Build the ODD gap-analysis image from `AVOPS/ODD`                                                                                                         |
 | `odd <in> <out>`            | Run the ODD container on a directory of videos                                                                                                            |
@@ -137,7 +137,7 @@ AVOPS/scripts/sdg.sh odd-build                           # rebuild the ODD image
 AVOPS/scripts/sdg.sh odd <videos-dir> <output-dir>       # run only the ODD container
 ```
 
-The ODD container runs with host networking and reaches the VLM at `ODD_VLM_URL` (default `http://localhost:8010/v1`, model `ODD_VLM_MODEL`). Set `ODD_MOCK_VLM=1` to use heuristic perception when no VLM endpoint is available.
+The ODD container runs with host networking and reaches the VLM at `ODD_VLM_URL` (default `http://127.0.0.1:8010/v1`, model `ODD_VLM_MODEL`). Set `ODD_MOCK_VLM=1` to use heuristic perception when no VLM endpoint is available. The VLM receives the whole clip by default; `ODD_VLM_INPUT=frame` sends only the first frame.
 
 The image is built from `AVOPS/ODD` on first use; run `odd-build` to rebuild it after changing the component.
 
@@ -145,7 +145,7 @@ The image is built from `AVOPS/ODD` on first use; run `odd-build` to rebuild it 
 
 [`AVOPS/ODD`](./ODD/README.md) is part of this repository and is built locally into the `odd-component:latest` image. It runs in three phases on a directory of driving videos:
 
-1. **Perception:** extracts keyframes and asks a VLM (Cosmos-Reason2 by default) for scene attributes such as weather, time of day, road, traffic lights, and other agents. Existing `Text_Annotations/` are reused, and `ODD_MOCK_VLM=1` or the offline fallback produces heuristic annotations.
+1. **Perception:** sends each clip to a VLM (Cosmos-Reason2 by default) for scene attributes such as weather, time of day, road, traffic lights, and other agents. Existing `Text_Annotations/` are reused, and `ODD_MOCK_VLM=1` or the offline fallback produces heuristic annotations.
 2. **Coverage:** scores each attribute's entropy against the targets in `ODD/configs/odd_coverage_spec.json` and flags gaps below `ODD_THRESHOLD` (default `0.8`).
 3. **Variation solver:** selects base clips for every gap and writes the variation specifications and one prompt paragraph per variation.
 
