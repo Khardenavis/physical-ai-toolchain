@@ -901,8 +901,6 @@ def generate_variations_for_gaps(
         for attribute_name, attribute_spec in category_spec.attributes.items():
             video_json_data["categories"][category_name][attribute_name] = {}
 
-            attr_report = report["attributes"].get(attribute_name)
-            threshold = thresholds[category_name][attribute_name]
             needed = needed_variations[category_name][attribute_name]
 
             for val in attribute_spec.expected_values:

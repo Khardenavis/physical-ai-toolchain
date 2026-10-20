@@ -123,30 +123,19 @@ def main() -> None:
     elif args.gpus is not None and "CUDA_VISIBLE_DEVICES" not in env:
         env["CUDA_VISIBLE_DEVICES"] = ",".join(str(idx) for idx in range(args.gpus))
 
-    if True:
-        torchrun = cosmos_python.with_name("torchrun")
-        torchrun_bin = str(torchrun) if torchrun.exists() else (shutil.which("torchrun") or "torchrun")
-        command = [
-            torchrun_bin,
-            f"--nproc_per_node={process_count}",
-            f"--master_port={args.master_port}",
-            "-m",
-            f"{PACKAGE}.utils.cosmos.cosmos_multiview_launcher",
-            "-i",
-            str(runtime_spec_path),
-            "-o",
-            str(output_dir),
-        ]
-    else:
-        command = [
-            str(cosmos_python),
-            "-m",
-            f"{PACKAGE}.utils.cosmos.cosmos_multiview_launcher",
-            "-i",
-            str(runtime_spec_path),
-            "-o",
-            str(output_dir),
-        ]
+    torchrun = cosmos_python.with_name("torchrun")
+    torchrun_bin = str(torchrun) if torchrun.exists() else (shutil.which("torchrun") or "torchrun")
+    command = [
+        torchrun_bin,
+        f"--nproc_per_node={process_count}",
+        f"--master_port={args.master_port}",
+        "-m",
+        f"{PACKAGE}.utils.cosmos.cosmos_multiview_launcher",
+        "-i",
+        str(runtime_spec_path),
+        "-o",
+        str(output_dir),
+    ]
     if args.disable_guardrails:
         command.append("--disable-guardrails")
 

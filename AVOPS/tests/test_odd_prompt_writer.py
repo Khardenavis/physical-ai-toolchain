@@ -87,7 +87,8 @@ def test_writer_falls_back_when_llm_raises():
     def boom(_messages):
         raise RuntimeError("endpoint down")
 
-    assert PromptWriter(boom).write(ANNOTATION, "timeOfDay", "night")[1] == "template"
+    _, source = PromptWriter(boom).write(ANNOTATION, "timeOfDay", "night")
+    assert source == "template"
 
 
 @pytest.fixture

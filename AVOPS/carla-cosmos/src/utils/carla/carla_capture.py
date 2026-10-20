@@ -432,6 +432,7 @@ def traffic_light_box_world_matrix(transform: Any, bbox: Any) -> np.ndarray:
             bbox_rotation = getattr(bbox, "rotation", transform.rotation)
             return transform_to_matrix(carla.Transform(bbox.location, bbox_rotation))
     except (AttributeError, RuntimeError, TypeError):
+        # Fall back to treating the box as actor-local.
         pass
     return bbox_local_to_world_matrix(transform, bbox)
 
@@ -895,6 +896,7 @@ def collect_map_records(
                 }
             )
         except RuntimeError:
+            # Stop-line metadata is best-effort; skip lights without a drivable waypoint.
             pass
 
     return records
@@ -1905,6 +1907,7 @@ def main() -> None:
                 if m:
                     target_town = m.group(1)
         except Exception:
+            # Keep the requested town when the OpenSCENARIO file cannot be read.
             pass
     elif args.scenario:
         xml_path = os.path.join(SCENARIOS_DIR, f"{args.scenario}.xml")
@@ -1922,6 +1925,7 @@ def main() -> None:
                         target_town = s.attrib["town"]
                         break
             except Exception:
+                # Keep the current town when the scenario XML cannot be parsed.
                 pass
 
     log_step(f"Resolving CARLA world (target map: {target_town})")
@@ -2017,6 +2021,7 @@ def main() -> None:
                     if a.attributes.get("role_name") == "hero":
                         a.destroy()
             except Exception:
+                # Best-effort cleanup of a stale hero vehicle before ScenarioRunner starts.
                 pass
             log_step(f"Launching ScenarioRunner: {' '.join(sr_cmd)}")
             sr_process = subprocess.Popen(sr_cmd, env=sr_env)
@@ -2033,6 +2038,7 @@ def main() -> None:
                             ego_vehicle = actor
                             break
                 except Exception:
+                    # The world may be reloading; retry on the next poll.
                     pass
                 if ego_vehicle:
                     break

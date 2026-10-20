@@ -189,6 +189,7 @@ class VLMAnnotator:
                     # Server is alive even if 401/404 on health
                     return True, f"Reachable ({url} returned {he.code})"
             except Exception:
+                # Unreachable URL; try the next health endpoint.
                 pass
 
         return False, f"Could not reach {self.endpoint_url}"
