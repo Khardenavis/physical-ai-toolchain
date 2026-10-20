@@ -2266,7 +2266,7 @@ def main() -> None:
             "width": args.width,
             "height": args.height,
             "town": world.get_map().name,
-            "seed": args.seed,
+            "seed": manifest.get("seed"),
             "active_views": active_view_keys,
             "vehicles": args.vehicles,
             "lead_vehicles": args.lead_vehicles,

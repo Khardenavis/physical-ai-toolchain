@@ -25,8 +25,27 @@ Cosmos run as separate containers:
   checkpoint
 - Sufficient GPU memory for the configured Cosmos multi-view inference. The
   source workflow is configured for up to eight GPUs.
-- The official CARLA image extension downloads roughly 7.3 GB of version-matched
-  AdditionalMaps assets during its first build.
+- The official CARLA image extension downloads the version-matched
+  AdditionalMaps archive during its first build.
+
+The first CARLA build also pulls the `carlasim/carla:0.9.15` image (about 8.9 GB
+compressed) and downloads the AdditionalMaps archive (about 7.4 GB compressed)
+before extracting it into the image. Cosmos Transfer 2.5's source checkout and
+Git LFS files add variable storage use. On first inference, the `hf-cache`
+Docker volume downloads the gated `Cosmos-Transfer2.5-2B` and
+`Cosmos-Predict2.5-2B` checkpoints (about 4.8 GB each). Reserve at least 50 GB
+free for known downloads, extracted assets, and build overhead; allow more for
+the source/LFS checkout, Docker layers and cache, and generated videos.
+
+Before building, accept the access terms on the Hugging Face pages for
+[`Cosmos-Transfer2.5-2B`](https://huggingface.co/nvidia/Cosmos-Transfer2.5-2B)
+and [`Cosmos-Predict2.5-2B`](https://huggingface.co/nvidia/Cosmos-Predict2.5-2B).
+Set `HF_TOKEN` in `.env` for an account with access. If guardrails are enabled,
+also accept the terms for
+[`Cosmos-Guardrail1`](https://huggingface.co/nvidia/Cosmos-Guardrail1); its
+download size depends on the model revision and configuration. See the [AVOPS
+download and disk guide](../README.md#downloads-model-access-and-disk) for the
+combined first-run estimate and the ODD VLM model requirements.
 
 ## Layout
 

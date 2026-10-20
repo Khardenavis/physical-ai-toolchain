@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 COSMOS_REPO_URL="https://github.com/nvidia-cosmos/cosmos-transfer2.5.git"
-COSMOS_REF="${COSMOS_REF:-main}"
+COSMOS_REF="${COSMOS_REF:-2ff49d0717af02057ae79bc75c00fbff9da1b4e7}"
 COSMOS_IMAGE="${COSMOS_IMAGE:-cosmos-transfer2.5:local}"
 
 for command_name in docker git git-lfs; do

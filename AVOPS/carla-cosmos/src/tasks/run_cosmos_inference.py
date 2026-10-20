@@ -40,7 +40,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-ids", default=None, help="Comma-separated CUDA device IDs to expose.")
     parser.add_argument("--allow-low-vram", action="store_true", help="Warn instead of blocking on low-VRAM GPUs.")
     parser.add_argument("--master-port", type=int, default=12341)
-    parser.add_argument("--disable-guardrails", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--dry-run", action="store_true", help="Print the launch command without running inference.")
     return parser.parse_args()
 

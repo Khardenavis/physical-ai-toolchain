@@ -6,6 +6,8 @@ Standalone Docker container component for **ODD Coverage Analysis & Generative S
 
 This component ingests raw driving videos (and optional pre-existing annotations), evaluates Operational Design Domain (ODD) completeness and distribution entropy against target thresholds using VLM perception, detects environmental and operational coverage gaps, and produces generative variation specifications alongside comprehensive final gap output reports.
 
+The default VLM is `nvidia/Cosmos-Reason2-2B` (about 4.9 GB), downloaded by the service hosting `VLM_URL`. Accept the model's [Hugging Face access terms](https://huggingface.co/nvidia/Cosmos-Reason2-2B) and configure that service with an authorized `HF_TOKEN`. See the [AVOPS download and disk guide](../README.md#downloads-model-access-and-disk) for CARLA assets and combined storage planning.
+
 ---
 
 ## 1. Component Architecture & Flow

@@ -21,6 +21,29 @@ Install the following tools and configure access to a Kubernetes cluster with GP
 
 The cluster needs a GPU node for GPU workloads. Preflight warns if Kubernetes reports no allocatable NVIDIA GPUs.
 
+### Downloads, model access, and disk
+
+The first run downloads these images, assets, source files, or model weights. The Hugging Face model pages require the user to sign in and accept their access terms before downloading. `HF_TOKEN` must belong to an account with access to each gated model.
+
+| Artifact | Source | First-download size | Access and storage notes |
+|----------|--------|--------------------:|-------------------------|
+| Cosmos-Reason2-2B | [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Reason2-2B) | About 4.9 GB | Accept the model's Hugging Face terms. Downloaded by the VLM service host into its Hugging Face cache; the ODD container calls that service through `ODD_VLM_URL`. |
+| CARLA 0.9.15 image | [`carlasim/carla:0.9.15` on Docker Hub](https://hub.docker.com/r/carlasim/carla/tags?name=0.9.15) | About 8.9 GB compressed | Pulled and stored in the local Docker image cache. |
+| CARLA AdditionalMaps 0.9.15 | [Official CARLA release archive](https://carla-releases.s3.eu-west-3.amazonaws.com/Linux/AdditionalMaps_0.9.15.tar.gz) | About 7.4 GB compressed | Downloaded during the CARLA image build, then extracted into the image. The extracted maps and retained build layers use additional disk. |
+| Cosmos Transfer 2.5 source and Git LFS files | [NVIDIA source repository](https://github.com/nvidia-cosmos/cosmos-transfer2.5) | Varies | Cloned and built locally by `AVOPS/carla-cosmos/build-cosmos-image.sh`; allow additional space for the checkout, LFS objects, and Docker build cache. |
+| Cosmos-Transfer2.5-2B | [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Transfer2.5-2B) | About 4.8 GB | Accept the model's Hugging Face terms. Cached in the persistent `hf-cache` Docker volume used by the CARLA pipeline. |
+| Cosmos-Predict2.5-2B | [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Predict2.5-2B) | About 4.8 GB | Accept the model's Hugging Face terms. Cached in the same `hf-cache` volume. |
+| Cosmos-Guardrail1 (when guardrails are enabled) | [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Guardrail1) | Varies | Accept the model's Hugging Face terms. Not included in the current default download estimate; size depends on the selected model revision and guardrail configuration. |
+
+The listed, quantified downloads total about **30.8 GB**. Treat this as a lower
+bound, not a disk requirement: it excludes the Cosmos source/LFS checkout,
+extracted CARLA maps, Docker image layers and build cache, and generated
+outputs. Reserve at least **50 GB free** before building, and more if Docker
+data, source checkouts, and generated videos share a disk. The `hf-cache` volume
+persists CARLA model weights across runs; the VLM's cache is on the host or
+container running the VLM service. Pre-fetch models into those caches or mirror
+the linked sources when preparing an offline environment.
+
 ### Configure and Install
 
 From the repository root, configure the external SDG workflow checkout and cluster credentials:
@@ -211,7 +234,7 @@ To use fewer GPUs, run four views (for example `CARLA_COSMOS_VIEWS=front_wide,cr
 Constraints:
 
 * CARLA scenarios exist only for road width, traffic-light direction, road surface, lane change, cut-in, and pedestrian gaps. Other gaps, such as `weatherType` and `timeOfDay`, are listed and skipped; the stage fails if nothing maps.
-* The CARLA images are built locally on first use (`AVOPS/carla-cosmos/build-cosmos-image.sh`), which downloads about 7 GB of CARLA maps and needs `HF_TOKEN` for the gated Cosmos checkpoint.
+* The CARLA images are built locally on first use (`AVOPS/carla-cosmos/build-cosmos-image.sh`); see [downloads, model access, and disk](#downloads-model-access-and-disk) for the asset sizes, sources, and Hugging Face access requirements.
 * Prompts come from the CARLA pipeline's own prompt files, not the ODD paragraphs.
 * Files under `AVOPS/carla-cosmos/data/runs/<run_id>/` are written by the container as root.
 

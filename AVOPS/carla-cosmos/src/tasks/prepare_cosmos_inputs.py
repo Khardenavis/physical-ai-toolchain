@@ -331,6 +331,7 @@ def main() -> None:
     control_render_fps = parse_fps(args.control_render_fps, capture_fps=capture_fps, parquet_fps=annotation_fps)
     width = int(args.width or manifest.get("width") or 1280)
     height = int(args.height or manifest.get("height") or 720)
+    seed = manifest.get("seed")
 
     copy_rgb_videos(data_root, args.clip_id, manifest, view_keys)
     rows_by_element = load_scene_rows(
@@ -418,7 +419,7 @@ def main() -> None:
         guidance=args.guidance,
         control_weight=args.control_weight,
         num_steps=args.num_steps,
-        seed=args.seed,
+        seed=seed,
         num_chunks=args.num_chunks,
         chunk_overlap=args.chunk_overlap,
         save_combined_views=args.save_combined_views,
